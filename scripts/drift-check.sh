@@ -44,6 +44,9 @@ check_installed() {  # $1 repo file, $2 installed file, $3 label
 check_installed tools/airpods-mic-guard/launchd/com.ancplua.airpods-mic-guard.plist \
   "$HOME/Library/LaunchAgents/com.ancplua.airpods-mic-guard.plist" \
   "airpods-mic-guard launchd plist"
+check_installed tools/vitals/launchd/dev.ancplua.vitals.plist \
+  "$HOME/Library/LaunchAgents/dev.ancplua.vitals.plist" \
+  "vitals launchd plist"
 [[ -x "$HOME/.local/bin/airpods-mic-guardd" ]] || {
   echo "DRIFT: airpods-mic-guardd binary missing from ~/.local/bin"
   drift=1

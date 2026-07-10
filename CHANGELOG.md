@@ -2,6 +2,14 @@
 
 Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest entry first.
 
+## [1.1.0] - 2026-07-10
+
+### Added
+- Tool `vitals` onboarded as the first *federated* tool: code stays in its
+  canonical repo (github.com/ANcpLua/vitals); human-plugins tracks the
+  deployment (drift-checked launchd plist + docs triplet). Establishes the
+  federated-tool pattern for tools with their own healthy repos.
+
 ## [1.0.0] - 2026-07-10
 
 ### Added
