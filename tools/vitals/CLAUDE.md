@@ -3,10 +3,10 @@
 Read root `../../CLAUDE.md` first (mandatory drift check). History in
 [CHANGELOG.md](CHANGELOG.md), newest entry first.
 
-**Federated tool**: source of truth for code is
-`~/RiderProjects/qyl-workspace/vitals` (github.com/ANcpLua/vitals). Code
-changes happen THERE, with that repo's own history. This entry owns only the
-deployment record.
+**Federated tool**: source of truth for code is **github.com/ANcpLua/vitals**.
+There is no standing local clone — clone on demand, work, push, delete the
+clone. Code changes happen THERE, with that repo's own history. This entry
+owns only the deployment record.
 
 Rules:
 - The repo copy `launchd/dev.ancplua.vitals.plist` must stay byte-identical to

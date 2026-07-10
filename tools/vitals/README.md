@@ -7,8 +7,8 @@ persistence, no network.
 
 ## Canonical home
 
-Source, build, and installer: **`~/RiderProjects/qyl-workspace/vitals`**
-(github.com/ANcpLua/vitals). This monorepo entry does NOT vendor the source —
+Source, build, and installer: **github.com/ANcpLua/vitals** (no standing local
+clone — clone on demand, work, push, delete). This monorepo entry does NOT vendor the source —
 vitals predates human-plugins and has its own healthy repo/history. Here we
 track only what makes it a "human plugin": the login-item deployment.
 

@@ -4,6 +4,14 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 Code history lives in the canonical repo (github.com/ANcpLua/vitals); this file
 tracks the deployment on this host only.
 
+## [no-local-clone] - 2026-07-10
+
+### Changed
+- Standing local clone (`~/RiderProjects/qyl-workspace/vitals`) deleted after
+  verifying clean tree and zero unpushed commits. Canonical home is now
+  github.com/ANcpLua/vitals only; clone on demand. Installed runtime artifacts
+  (`/Applications/Vitals.app`, LaunchAgent) untouched.
+
 ## [onboarded] - 2026-07-10
 
 ### Added
