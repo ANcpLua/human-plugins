@@ -73,3 +73,4 @@ ask.>
 | airpods-mic-guard | [README](tools/airpods-mic-guard/README.md) · [CLAUDE](tools/airpods-mic-guard/CLAUDE.md) · [CHANGELOG](tools/airpods-mic-guard/CHANGELOG.md) | active (launchd daemon) |
 | heizoel-monitor | [README](tools/heizoel-monitor/README.md) · [CLAUDE](tools/heizoel-monitor/CLAUDE.md) · [CHANGELOG](tools/heizoel-monitor/CHANGELOG.md) | retired 2026-07-10 |
 | vitals | [README](tools/vitals/README.md) · [CLAUDE](tools/vitals/CLAUDE.md) · [CHANGELOG](tools/vitals/CHANGELOG.md) | active (federated — code in github.com/ANcpLua/vitals) |
+| disk-guard | [README](tools/disk-guard/README.md) · [CLAUDE](tools/disk-guard/CLAUDE.md) · [CHANGELOG](tools/disk-guard/CHANGELOG.md) | active (federated — code in github.com/ANcpLua/disk-guard, private) |

@@ -47,8 +47,15 @@ check_installed tools/airpods-mic-guard/launchd/com.ancplua.airpods-mic-guard.pl
 check_installed tools/vitals/launchd/dev.ancplua.vitals.plist \
   "$HOME/Library/LaunchAgents/dev.ancplua.vitals.plist" \
   "vitals launchd plist"
+check_installed tools/disk-guard/launchd/dev.ancplua.disk-guard.plist \
+  "$HOME/Library/LaunchAgents/dev.ancplua.disk-guard.plist" \
+  "disk-guard launchd plist"
 [[ -x "$HOME/.local/bin/airpods-mic-guardd" ]] || {
   echo "DRIFT: airpods-mic-guardd binary missing from ~/.local/bin"
+  drift=1
+}
+[[ -x "$HOME/.local/bin/disk-guardd" ]] || {
+  echo "DRIFT: disk-guardd script missing from ~/.local/bin"
   drift=1
 }
 

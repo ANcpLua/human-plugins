@@ -2,6 +2,14 @@
 
 Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest entry first.
 
+## [1.2.0] - 2026-07-25
+
+### Added
+- Tool `disk-guard` onboarded as the second federated tool: code in its
+  canonical private repo (github.com/ANcpLua/disk-guard); this repo tracks
+  the deployment (drift-checked launchd plist, script-presence check, docs
+  triplet). drift-check.sh extended accordingly.
+
 ## [1.1.0] - 2026-07-10
 
 ### Added
