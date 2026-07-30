@@ -23,7 +23,6 @@ check → build → test → package → smoke → isolated deploy → health �
 | [disk-guard](tools/disk-guard/README.md) | macOS | Reclaims only allowlisted derived data below a disk threshold |
 | [forgejo-local-ci](tools/forgejo-local-ci/README.md) | macOS, Linux | Runs an isolated local Forgejo and containerized Actions runner |
 | [hammerspoon-claude-launcher](tools/hammerspoon-claude-launcher/README.md) | macOS | Opens and tiles agent terminals from a mouse or keyboard trigger |
-| [heizoel-monitor](tools/heizoel-monitor/README.md) | macOS, Linux | Finds matching heating-oil listings and notifies through ntfy |
 | [memcheck](tools/memcheck/README.md) | macOS, Linux | Reports memory, swap, and matching process RSS |
 | [opusbreak](tools/opusbreak/README.md) | macOS, Linux | Caches Anthropic status and renders concise advisories |
 | [qyl-discord-sync](tools/qyl-discord-sync/README.md) | macOS, Linux | Mirrors versioned upstream documentation into Discord |

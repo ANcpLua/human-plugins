@@ -56,17 +56,6 @@
       "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/hammerspoon-claude-launcher"
     },
     {
-      "id": "heizoel-monitor",
-      "displayName": "Heizöl Monitor",
-      "summary": "Finds matching heating-oil listings without periodic request fingerprints and notifies through ntfy.",
-      "kind": "daemon",
-      "platforms": [
-        "macos",
-        "linux"
-      ],
-      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/heizoel-monitor"
-    },
-    {
       "id": "memcheck",
       "displayName": "memcheck",
       "summary": "Reports memory, swap, and matching process RSS on macOS and Linux.",

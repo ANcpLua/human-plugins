@@ -14,12 +14,11 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 
 ### Changed
 - This repository is now the source of truth for Vitals and Disk Guard.
-- Heizöl Monitor is a dependency-free macOS/Linux daemon instead of a thin
-  wrapper around the generic whcli/Tauri product.
 
 ### Removed
-- Federated ownership, the retired Heizöl shell, and the AirPods polling-era
-  implementation.
+- Heizöl Monitor source, packaging, and releases. It is maintained only in its
+  private standalone repository.
+- Federated ownership and the AirPods polling-era implementation.
 
 ## [1.3.0] - 2026-07-30
 
