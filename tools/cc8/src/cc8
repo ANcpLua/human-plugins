@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+session="${CC8_SESSION:-cc8}"
+if [[ ! "$session" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "cc8: CC8_SESSION contains unsupported characters" >&2
+  exit 2
+fi
+
+usage() {
+  printf '%s\n' "usage: cc8 [windows|grid|status|kill]"
+}
+
+require_tmux() {
+  command -v tmux >/dev/null || {
+    echo "cc8: tmux is required" >&2
+    exit 2
+  }
+}
+
+self_test() {
+  [[ "$session" =~ ^[A-Za-z0-9._-]+$ ]]
+  [[ "$(seq 2 8 | wc -l | tr -d ' ')" == 7 ]]
+  echo "cc8 self-test: ok"
+}
+
+mode="${1:-windows}"
+case "$mode" in
+  --self-test)
+    self_test
+    exit 0
+    ;;
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  windows|grid|status|kill) ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac
+
+require_tmux
+
+case "$mode" in
+  status)
+    if tmux has-session -t "$session" 2>/dev/null; then
+      tmux list-windows -t "$session"
+    else
+      echo "no session $session"
+    fi
+    exit 0
+    ;;
+  kill)
+    if tmux has-session -t "$session" 2>/dev/null; then
+      tmux kill-session -t "$session"
+      echo "killed $session"
+    else
+      echo "no session $session"
+    fi
+    exit 0
+    ;;
+esac
+
+if tmux has-session -t "$session" 2>/dev/null; then
+  exec tmux attach-session -t "$session"
+fi
+
+if [[ "$mode" == grid ]]; then
+  tmux new-session -d -s "$session" -n agents
+  for _ in $(seq 1 7); do
+    tmux split-window -t "$session:agents"
+    tmux select-layout -t "$session:agents" tiled
+  done
+  tmux select-pane -t "$session:agents.0"
+else
+  tmux new-session -d -s "$session" -n 1
+  for number in $(seq 2 8); do
+    tmux new-window -t "$session" -n "$number"
+  done
+  tmux select-window -t "$session:1"
+fi
+
+exec tmux attach-session -t "$session"

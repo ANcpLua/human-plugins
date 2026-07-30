@@ -282,12 +282,14 @@ def validate_manifest(path: Path, data: object) -> list[str]:
                     continue
                 for index, service in enumerate(entries):
                     field = f"{prefix}.install.services.{platform}[{index}]"
-                    required_service = {"template", "target", "id"}
+                    required_service = {"template", "target", "id", "activate"}
                     if (
                         not isinstance(service, dict)
                         or set(service) != required_service
                     ):
-                        errors.append(f"{field} must contain template, target, and id")
+                        errors.append(
+                            f"{field} must contain template, target, id, and activate"
+                        )
                         continue
                     _relative_path(service.get("template"), f"{field}.template", errors)
                     if isinstance(service.get("template"), str) and not _packaged(
@@ -308,6 +310,8 @@ def validate_manifest(path: Path, data: object) -> list[str]:
                         errors.append(
                             f"{field}.id must be a non-empty service identifier"
                         )
+                    if not isinstance(service.get("activate"), bool):
+                        errors.append(f"{field}.activate must be a boolean")
         health = install.get("health")
         if not isinstance(health, dict) or set(health) != set(platforms):
             errors.append(f"{prefix}: install.health keys must exactly match platforms")

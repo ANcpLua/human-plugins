@@ -85,7 +85,8 @@
         {
           "template": "services/macos/dev.ancplua.vitals.plist",
           "target": "~/Library/LaunchAgents/dev.ancplua.vitals.plist",
-          "id": "dev.ancplua.vitals"
+          "id": "dev.ancplua.vitals",
+          "activate": true
         }
       ]
     },

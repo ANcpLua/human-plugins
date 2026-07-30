@@ -19,8 +19,12 @@ check → build → test → package → smoke → isolated deploy → health �
 | Tool | Platforms | Purpose |
 |---|---|---|
 | [airpods-mic-guard](tools/airpods-mic-guard/README.md) | macOS | Keeps AirPods on hi-fi output until an app owns the microphone |
+| [cc8](tools/cc8/README.md) | macOS, Linux | Creates eight tmux workspaces for parallel coding agents |
 | [disk-guard](tools/disk-guard/README.md) | macOS | Reclaims only allowlisted derived data below a disk threshold |
 | [heizoel-monitor](tools/heizoel-monitor/README.md) | macOS, Linux | Finds matching heating-oil listings and notifies through ntfy |
+| [memcheck](tools/memcheck/README.md) | macOS, Linux | Reports memory, swap, and matching process RSS |
+| [opusbreak](tools/opusbreak/README.md) | macOS, Linux | Caches Anthropic status and renders concise advisories |
+| [repo-hygiene](tools/repo-hygiene/README.md) | macOS, Linux | Finds committed build output without scanning file contents |
 | [vitals](tools/vitals/README.md) | macOS | Native menu-bar CPU, memory, disk, process, and Claude telemetry |
 
 [`catalog.json`](catalog.json) is the generated machine index. `AGENTS.md` is

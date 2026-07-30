@@ -239,7 +239,7 @@ def _install_services(
     current: Path,
     transaction: Path,
     backups: list[_Backup],
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     services = manifest["install"]["services"].get(platform, [])
     for service in services:
         target = _expand_target(service["target"], home)
@@ -249,10 +249,10 @@ def _install_services(
     return services
 
 
-def _reload_services(services: list[dict[str, str]], platform: str, home: Path) -> None:
+def _reload_services(services: list[dict[str, Any]], platform: str, home: Path) -> None:
     if platform == "macos":
         domain = f"gui/{os.getuid()}"
-        for service in services:
+        for service in (item for item in services if item["activate"]):
             target = _expand_target(service["target"], home)
             subprocess.run(
                 ["launchctl", "bootout", domain, str(target)],
@@ -263,7 +263,7 @@ def _reload_services(services: list[dict[str, str]], platform: str, home: Path) 
             _run(["launchctl", "bootstrap", domain, str(target)])
         return
     _run(["systemctl", "--user", "daemon-reload"])
-    for service in services:
+    for service in (item for item in services if item["activate"]):
         _run(["systemctl", "--user", "enable", "--now", service["id"]])
 
 
@@ -361,7 +361,7 @@ def install_package(
     previous_target = os.readlink(current) if current.is_symlink() else None
     transaction = tool_root / f".transaction-{uuid.uuid4().hex}"
     backups: list[_Backup] = []
-    services: list[dict[str, str]] = []
+    services: list[dict[str, Any]] = []
     try:
         _atomic_symlink(str(Path("releases") / release_id), current)
         _install_links(manifest, selected_home, current, transaction, backups)
@@ -443,7 +443,7 @@ def rollback(
     current = tool_root / "current"
     transaction = tool_root / f".rollback-{uuid.uuid4().hex}"
     backups: list[_Backup] = []
-    services: list[dict[str, str]] = []
+    services: list[dict[str, Any]] = []
     old_target = os.readlink(current) if current.is_symlink() else None
     try:
         _atomic_symlink(str(Path("releases") / target_id), current)

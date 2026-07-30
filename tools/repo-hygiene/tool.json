@@ -1,0 +1,72 @@
+{
+  "$schema": "../../pipeline/tool.schema.json",
+  "schemaVersion": 1,
+  "id": "repo-hygiene",
+  "displayName": "Repo Hygiene",
+  "summary": "Finds generated build output committed to Git without walking file contents.",
+  "status": "active",
+  "kind": "cli",
+  "license": "MIT",
+  "platforms": ["macos", "linux"],
+  "source": {
+    "repository": "ANcpLua/human-plugins",
+    "path": "tools/repo-hygiene",
+    "migratedFrom": "ANcpLua/repo-hygiene",
+    "migratedCommit": "ae9608ec5dad565330187fe3b9182468b9a326af"
+  },
+  "pipeline": {
+    "macos": {
+      "runner": "macos-15",
+      "stages": {
+        "check": [
+          {"name": "compile", "run": ["python3", "-m", "py_compile", "src/repo_hygiene.py"]}
+        ],
+        "build": [
+          {"name": "stage-executable", "run": ["/usr/bin/install", "-m", "755", "src/repo_hygiene.py", "{build}/repo-hygiene"]}
+        ],
+        "test": [
+          {"name": "unit", "run": ["python3", "-m", "unittest", "discover", "-s", "tests"], "env": {"PYTHONPATH": "src"}}
+        ],
+        "smoke": [
+          {"name": "packaged-version", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/repo-hygiene", "--", "--version"]}
+        ]
+      }
+    },
+    "linux": {
+      "runner": "ubuntu-24.04",
+      "stages": {
+        "check": [
+          {"name": "compile", "run": ["python3", "-m", "py_compile", "src/repo_hygiene.py"]}
+        ],
+        "build": [
+          {"name": "stage-executable", "run": ["/usr/bin/install", "-m", "755", "src/repo_hygiene.py", "{build}/repo-hygiene"]}
+        ],
+        "test": [
+          {"name": "unit", "run": ["python3", "-m", "unittest", "discover", "-s", "tests"], "env": {"PYTHONPATH": "src"}}
+        ],
+        "smoke": [
+          {"name": "packaged-version", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/repo-hygiene", "--", "--version"]}
+        ]
+      }
+    }
+  },
+  "package": {
+    "files": [
+      {"source": "{build}/repo-hygiene", "destination": "bin/repo-hygiene"}
+    ]
+  },
+  "install": {
+    "links": [
+      {"payload": "bin/repo-hygiene", "target": "~/.local/bin/repo-hygiene"}
+    ],
+    "services": {},
+    "health": {
+      "macos": [
+        {"name": "version", "run": ["{current}/bin/repo-hygiene", "--version"]}
+      ],
+      "linux": [
+        {"name": "version", "run": ["{current}/bin/repo-hygiene", "--version"]}
+      ]
+    }
+  }
+}

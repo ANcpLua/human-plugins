@@ -1,0 +1,72 @@
+{
+  "$schema": "../../pipeline/tool.schema.json",
+  "schemaVersion": 1,
+  "id": "cc8",
+  "displayName": "cc8",
+  "summary": "Creates an eight-workspace tmux session for parallel coding agents.",
+  "status": "active",
+  "kind": "cli",
+  "license": "MIT",
+  "platforms": ["macos", "linux"],
+  "source": {
+    "repository": "ANcpLua/human-plugins",
+    "path": "tools/cc8",
+    "migratedFrom": "ANcpLua/dotfiles",
+    "migratedCommit": "68e16ddebd6d67dec34635ba1febeff70481a0d2"
+  },
+  "pipeline": {
+    "macos": {
+      "runner": "macos-15",
+      "stages": {
+        "check": [
+          {"name": "syntax", "run": ["bash", "-n", "src/cc8"]}
+        ],
+        "build": [
+          {"name": "stage-executable", "run": ["/usr/bin/install", "-m", "755", "src/cc8", "{build}/cc8"]}
+        ],
+        "test": [
+          {"name": "self-test", "run": ["bash", "src/cc8", "--self-test"]}
+        ],
+        "smoke": [
+          {"name": "packaged-self-test", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/cc8", "--", "--self-test"]}
+        ]
+      }
+    },
+    "linux": {
+      "runner": "ubuntu-24.04",
+      "stages": {
+        "check": [
+          {"name": "syntax", "run": ["bash", "-n", "src/cc8"]}
+        ],
+        "build": [
+          {"name": "stage-executable", "run": ["/usr/bin/install", "-m", "755", "src/cc8", "{build}/cc8"]}
+        ],
+        "test": [
+          {"name": "self-test", "run": ["bash", "src/cc8", "--self-test"]}
+        ],
+        "smoke": [
+          {"name": "packaged-self-test", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/cc8", "--", "--self-test"]}
+        ]
+      }
+    }
+  },
+  "package": {
+    "files": [
+      {"source": "{build}/cc8", "destination": "bin/cc8"}
+    ]
+  },
+  "install": {
+    "links": [
+      {"payload": "bin/cc8", "target": "~/.local/bin/cc8"}
+    ],
+    "services": {},
+    "health": {
+      "macos": [
+        {"name": "self-test", "run": ["{current}/bin/cc8", "--self-test"]}
+      ],
+      "linux": [
+        {"name": "self-test", "run": ["{current}/bin/cc8", "--self-test"]}
+      ]
+    }
+  }
+}

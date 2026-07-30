@@ -1,0 +1,70 @@
+{
+  "$schema": "../../pipeline/tool.schema.json",
+  "schemaVersion": 1,
+  "id": "memcheck",
+  "displayName": "memcheck",
+  "summary": "Reports memory, swap, and matching process RSS on macOS and Linux.",
+  "status": "active",
+  "kind": "cli",
+  "license": "MIT",
+  "platforms": ["macos", "linux"],
+  "source": {
+    "repository": "ANcpLua/human-plugins",
+    "path": "tools/memcheck"
+  },
+  "pipeline": {
+    "macos": {
+      "runner": "macos-15",
+      "stages": {
+        "check": [
+          {"name": "compile", "run": ["python3", "-m", "py_compile", "src/memcheck.py"]}
+        ],
+        "build": [
+          {"name": "stage-executable", "run": ["/usr/bin/install", "-m", "755", "src/memcheck.py", "{build}/memcheck"]}
+        ],
+        "test": [
+          {"name": "unit", "run": ["python3", "-m", "unittest", "discover", "-s", "tests"], "env": {"PYTHONPATH": "src"}}
+        ],
+        "smoke": [
+          {"name": "packaged-self-test", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/memcheck", "--", "--self-test"]}
+        ]
+      }
+    },
+    "linux": {
+      "runner": "ubuntu-24.04",
+      "stages": {
+        "check": [
+          {"name": "compile", "run": ["python3", "-m", "py_compile", "src/memcheck.py"]}
+        ],
+        "build": [
+          {"name": "stage-executable", "run": ["/usr/bin/install", "-m", "755", "src/memcheck.py", "{build}/memcheck"]}
+        ],
+        "test": [
+          {"name": "unit", "run": ["python3", "-m", "unittest", "discover", "-s", "tests"], "env": {"PYTHONPATH": "src"}}
+        ],
+        "smoke": [
+          {"name": "packaged-self-test", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/memcheck", "--", "--self-test"]}
+        ]
+      }
+    }
+  },
+  "package": {
+    "files": [
+      {"source": "{build}/memcheck", "destination": "bin/memcheck"}
+    ]
+  },
+  "install": {
+    "links": [
+      {"payload": "bin/memcheck", "target": "~/.local/bin/memcheck"}
+    ],
+    "services": {},
+    "health": {
+      "macos": [
+        {"name": "self-test", "run": ["{current}/bin/memcheck", "--self-test"]}
+      ],
+      "linux": [
+        {"name": "self-test", "run": ["{current}/bin/memcheck", "--self-test"]}
+      ]
+    }
+  }
+}

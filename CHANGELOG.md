@@ -9,6 +9,8 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
   and rollback orchestration.
 - Deterministic release packages, SHA-256 records, GitHub artifact attestations,
   failure diagnostics, and an atomic updater.
+- Canonical macOS/Linux implementations of cc8, memcheck, opusbreak, and
+  repo-hygiene.
 
 ### Changed
 - This repository is now the source of truth for Vitals and Disk Guard.

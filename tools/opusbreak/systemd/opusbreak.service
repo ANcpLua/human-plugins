@@ -1,0 +1,8 @@
+[Unit]
+Description=Refresh Anthropic service status
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env node {current}/bin/opusbreak poll

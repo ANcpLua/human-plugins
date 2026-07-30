@@ -84,9 +84,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private func refresh() {
         let last = previous
-        Task.detached(priority: .utility) { [weak self] in
-            let result = Self.sample(previous: last)
-            await MainActor.run { self?.apply(result) }
+        let sample = Task.detached(priority: .utility) {
+            Self.sample(previous: last)
+        }
+        Task { [weak self] in
+            self?.apply(await sample.value)
         }
     }
 

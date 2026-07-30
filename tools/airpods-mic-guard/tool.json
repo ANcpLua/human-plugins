@@ -67,7 +67,8 @@
         {
           "template": "services/macos/com.ancplua.airpods-mic-guard.plist",
           "target": "~/Library/LaunchAgents/com.ancplua.airpods-mic-guard.plist",
-          "id": "com.ancplua.airpods-mic-guard"
+          "id": "com.ancplua.airpods-mic-guard",
+          "activate": true
         }
       ]
     },

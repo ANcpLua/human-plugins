@@ -77,7 +77,8 @@
         {
           "template": "services/macos/dev.ancplua.disk-guard.plist",
           "target": "~/Library/LaunchAgents/dev.ancplua.disk-guard.plist",
-          "id": "dev.ancplua.disk-guard"
+          "id": "dev.ancplua.disk-guard",
+          "activate": true
         }
       ]
     },
