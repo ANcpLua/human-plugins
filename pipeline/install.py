@@ -120,6 +120,16 @@ def _release_tag(repository: str, release: str) -> str:
     return tag
 
 
+def _release_tag_from_id(release_id: str, digest: str) -> str:
+    suffix = f"-{digest[:12]}"
+    if not release_id.endswith(suffix):
+        raise InstallFailure(f"release directory does not match digest: {release_id}")
+    tag = release_id[: -len(suffix)]
+    if not RELEASE_NAME.fullmatch(tag):
+        raise InstallFailure(f"release directory contains an unsafe tag: {release_id}")
+    return tag
+
+
 def download_verified(
     tool: str,
     platform: str,
@@ -439,6 +449,8 @@ def rollback(
     target = tool_root / "releases" / target_id
     if not target.is_dir():
         raise InstallFailure(f"rollback release is missing: {target}")
+    target_digest = (target / ".digest").read_text(encoding="utf-8").strip()
+    target_release = _release_tag_from_id(target_id, target_digest)
     packaged = _load_packaged_manifest(target, manifest.id, selected_platform)
     current = tool_root / "current"
     transaction = tool_root / f".rollback-{uuid.uuid4().hex}"
@@ -474,7 +486,9 @@ def rollback(
         target_id,
         *[item for item in state.get("history", []) if item != target_id],
     ]
-    state["digest"] = (target / ".digest").read_text(encoding="utf-8").strip()
+    state["digest"] = target_digest
+    state["release"] = target_release
+    state["platform"] = selected_platform
     _atomic_text(state_path, json.dumps(state, indent=2, sort_keys=True) + "\n")
     return Installed(manifest.id, target_id, state["digest"], target, active_id)
 

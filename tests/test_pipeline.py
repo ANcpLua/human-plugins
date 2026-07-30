@@ -8,7 +8,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pipeline.install import InstallFailure, install_package, rollback
+from pipeline.install import (
+    InstallFailure,
+    install_package,
+    installation_status,
+    rollback,
+)
 from pipeline.model import Manifest, validate_manifest
 from pipeline.package import package_digest, package_tool
 from pipeline.probe import extract
@@ -175,7 +180,7 @@ class InstallTests(unittest.TestCase):
                 state_root=state,
                 activate_services=False,
             )
-            install_package(
+            second = install_package(
                 second_package,
                 tool="demo",
                 release="v2",
@@ -197,6 +202,12 @@ class InstallTests(unittest.TestCase):
                 text=True,
             ).strip()
             self.assertEqual(output, "v1")
+            status = installation_status("demo", home=home, state_root=state)
+            self.assertEqual(status["active"], first.release)
+            self.assertEqual(status["previous"], second.release)
+            self.assertEqual(status["release"], "v1")
+            self.assertEqual(status["digest"], first.digest)
+            self.assertEqual(status["platform"], PLATFORM)
 
 
 if __name__ == "__main__":
