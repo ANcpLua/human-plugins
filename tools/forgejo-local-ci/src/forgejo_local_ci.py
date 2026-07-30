@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import http.client
 import json
 import os
 import re
@@ -127,8 +129,9 @@ def runtime(args: argparse.Namespace) -> Runtime:
     return selected
 
 
-def write_secret(path: Path, value: str) -> None:
-    path.write_text(value.rstrip("\r\n") + "\n", encoding="utf-8")
+def write_secret(path: Path, value: str, *, newline: bool = True) -> None:
+    content = value.rstrip("\r\n") + ("\n" if newline else "")
+    path.write_text(content, encoding="utf-8")
     path.chmod(0o600)
 
 
@@ -145,7 +148,13 @@ def prepare_state(selected: Runtime) -> None:
     if not password.exists():
         write_secret(password, secrets.token_urlsafe(30))
     if not runner_secret.exists():
-        write_secret(runner_secret, secrets.token_hex(20))
+        write_secret(runner_secret, secrets.token_hex(20), newline=False)
+    else:
+        write_secret(
+            runner_secret,
+            runner_secret.read_text(encoding="utf-8"),
+            newline=False,
+        )
 
 
 def api(
@@ -179,8 +188,13 @@ def api(
     except urllib.error.HTTPError as error:
         detail = error.read().decode(errors="replace").strip()
         raise Failure(f"{method} {path}: HTTP {error.code}: {detail}") from error
-    except urllib.error.URLError as error:
-        raise Failure(f"{method} {path}: {error.reason}") from error
+    except (
+        urllib.error.URLError,
+        http.client.HTTPException,
+        TimeoutError,
+    ) as error:
+        reason = getattr(error, "reason", error)
+        raise Failure(f"{method} {path}: {reason}") from error
     if not content:
         return None
     try:
@@ -197,6 +211,16 @@ def exists(selected: Runtime, path: str) -> bool:
         if "HTTP 404:" in str(error):
             return False
         raise
+
+
+def remote_file_exists(selected: Runtime, path: str) -> bool:
+    try:
+        payload = api(selected, "GET", path)
+    except Failure as error:
+        if "HTTP 404:" in str(error):
+            return False
+        raise
+    return isinstance(payload, dict) and isinstance(payload.get("sha"), str)
 
 
 def wait_for_health(selected: Runtime, timeout: int = 120) -> None:
@@ -274,6 +298,40 @@ def ensure_repository(selected: Runtime, name: str) -> None:
     )
 
 
+def wait_for_git_repository(
+    selected: Runtime,
+    name: str,
+    timeout: int = 30,
+) -> None:
+    token = selected.token_file.read_text(encoding="utf-8").strip()
+    credentials = base64.b64encode(f"{selected.admin}:{token}".encode()).decode()
+    url = (
+        f"{selected.url}/{selected.admin}/{name}.git/info/refs?service=git-receive-pack"
+    )
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        operation = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Basic {credentials}",
+                "User-Agent": "forgejo-local-ci/2",
+            },
+        )
+        try:
+            with urllib.request.urlopen(operation, timeout=10) as response:
+                if response.status == 200:
+                    return
+        except urllib.error.HTTPError as error:
+            if error.code not in {401, 404}:
+                raise Failure(
+                    f"Forgejo Git endpoint returned HTTP {error.code}"
+                ) from error
+        except urllib.error.URLError:
+            pass
+        time.sleep(0.5)
+    raise Failure(f"Forgejo Git endpoint did not become ready for {name}")
+
+
 def askpass(selected: Runtime, directory: Path) -> Path:
     path = directory / "askpass"
     quoted_user = json.dumps(selected.admin)
@@ -291,6 +349,12 @@ def askpass(selected: Runtime, directory: Path) -> Path:
 
 
 def push_smoke_repository(selected: Runtime) -> None:
+    workflow_path = (
+        f"/api/v1/repos/{selected.admin}/{selected.repository}/contents/"
+        ".forgejo/workflows/local-ci.yml?ref=main"
+    )
+    if remote_file_exists(selected, workflow_path):
+        return
     with tempfile.TemporaryDirectory(prefix="forgejo-local-ci-smoke-") as temporary:
         repository = Path(temporary)
         workflow = repository / ".forgejo" / "workflows" / "local-ci.yml"
@@ -324,7 +388,13 @@ def push_smoke_repository(selected: Runtime) -> None:
         )
         helper = askpass(selected, repository)
         environment = os.environ.copy()
-        environment.update({"GIT_ASKPASS": str(helper), "GIT_TERMINAL_PROMPT": "0"})
+        environment.update(
+            {
+                "GIT_ASKPASS": str(helper),
+                "GIT_ASKPASS_REQUIRE": "force",
+                "GIT_TERMINAL_PROMPT": "0",
+            }
+        )
         run(
             [
                 "git",
@@ -395,6 +465,7 @@ def bootstrap(selected: Runtime) -> None:
     ensure_admin(selected)
     ensure_token(selected)
     ensure_repository(selected, selected.repository)
+    wait_for_git_repository(selected, selected.repository)
     push_smoke_repository(selected)
     register_runner(selected)
     run(
@@ -495,7 +566,13 @@ def import_repository(selected: Runtime, source: Path, name: str | None) -> None
         run(["git", "clone", "--mirror", str(source), str(mirror)])
         helper = askpass(selected, Path(temporary))
         environment = os.environ.copy()
-        environment.update({"GIT_ASKPASS": str(helper), "GIT_TERMINAL_PROMPT": "0"})
+        environment.update(
+            {
+                "GIT_ASKPASS": str(helper),
+                "GIT_ASKPASS_REQUIRE": "force",
+                "GIT_TERMINAL_PROMPT": "0",
+            }
+        )
         run(
             [
                 "git",
