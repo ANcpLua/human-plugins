@@ -8,7 +8,7 @@ tracks the deployment on this host only.
 
 ### Changed
 - Canonical repository and collection entry now link to each other and are
-  enforced by the repository-wide hourly link-integrity gate.
+  enforced by the repository-wide five-minute link-integrity gate.
 - Replaced the obsolete no-standing-clone instruction with the actual
   canonical checkout at `~/RiderProjects/qyl-workspace/vitals`.
 

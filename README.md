@@ -5,7 +5,7 @@ macOS host and peripherals. Not written for human consumption — agents read
 [CLAUDE.md](CLAUDE.md) first (mandatory drift check), then the per-tool docs.
 The machine-readable ownership and federation map is
 [catalog.json](catalog.json); CI validates every local/external link and every
-federated backlink on push, pull request, and hourly.
+federated backlink on push, pull request, and every five minutes.
 
 ## Tools
 

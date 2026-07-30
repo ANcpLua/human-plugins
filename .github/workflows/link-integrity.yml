@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
           if [ -z "$existing" ]; then
             gh issue create \
               --title "$title" \
-              --body "The hourly catalog/link validator failed. Inspect the run: $RUN_URL"
+              --body "The five-minute catalog/link validator failed. Inspect the run: $RUN_URL"
           fi
       - name: Close resolved scheduled failure
         if: success() && github.event_name == 'schedule'
@@ -44,5 +44,5 @@ jobs:
         run: |
           issue="$(gh issue list --state open --search 'Automated link-integrity failure in:title' --json number --jq '.[0].number // empty')"
           if [ -n "$issue" ]; then
-            gh issue close "$issue" --comment "Resolved by the successful hourly validation: $RUN_URL"
+            gh issue close "$issue" --comment "Resolved by the successful five-minute validation: $RUN_URL"
           fi

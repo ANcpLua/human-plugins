@@ -8,7 +8,7 @@ file tracks the deployment on this host only.
 
 ### Changed
 - Canonical repository and collection entry now link to each other and are
-  enforced by the repository-wide hourly link-integrity gate.
+  enforced by the repository-wide five-minute link-integrity gate.
 - Repository is public after a zero-finding full-history secret scan; the
   canonical local checkout is `~/disk-guard`.
 
