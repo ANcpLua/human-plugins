@@ -1,8 +1,17 @@
-# Changelog — disk-guard (deployment record)
+# Changelog — disk-guard
 
 Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest entry first.
-Code history lives in the canonical repo (github.com/ANcpLua/disk-guard); this
-file tracks the deployment on this host only.
+
+## Unreleased
+
+### Changed
+- Source ownership moved into `human-plugins`.
+- Launchd paths are rendered by the atomic installer instead of containing a
+  fixed username.
+
+### Added
+- Threshold no-op test, deterministic package, installed health check, and
+  rollback exercise.
 
 ## [catalog-linked] - 2026-07-30
 

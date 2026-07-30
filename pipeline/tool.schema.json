@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ANcpLua/human-plugins/blob/main/pipeline/tool.schema.json",
+  "title": "ANcpLua host tool",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "id",
+    "displayName",
+    "summary",
+    "status",
+    "kind",
+    "license",
+    "platforms",
+    "source",
+    "pipeline",
+    "package",
+    "install"
+  ],
+  "properties": {
+    "$schema": { "const": "../../pipeline/tool.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "displayName": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string", "minLength": 1 },
+    "status": { "const": "active" },
+    "kind": {
+      "enum": ["app", "automation", "cli", "daemon", "sandbox"]
+    },
+    "license": { "const": "MIT" },
+    "platforms": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["macos", "linux"] }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "path"],
+      "properties": {
+        "repository": { "const": "ANcpLua/human-plugins" },
+        "path": { "type": "string" },
+        "migratedFrom": { "type": "string" },
+        "migratedCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "pipeline": { "type": "object" },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files"],
+      "properties": {
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "destination"],
+            "properties": {
+              "source": { "type": "string", "minLength": 1 },
+              "destination": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "install": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["links", "services", "health"],
+      "properties": {
+        "links": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["payload", "target"],
+            "properties": {
+              "payload": { "type": "string", "minLength": 1 },
+              "target": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "services": { "type": "object" },
+        "health": { "type": "object" }
+      }
+    }
+  }
+}

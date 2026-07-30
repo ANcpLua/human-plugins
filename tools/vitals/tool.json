@@ -1,0 +1,101 @@
+{
+  "$schema": "../../pipeline/tool.schema.json",
+  "schemaVersion": 1,
+  "id": "vitals",
+  "displayName": "Vitals",
+  "summary": "Native macOS menu-bar telemetry for CPU, memory pressure, disk, processes, and Claude usage.",
+  "status": "active",
+  "kind": "app",
+  "license": "MIT",
+  "platforms": ["macos"],
+  "source": {
+    "repository": "ANcpLua/human-plugins",
+    "path": "tools/vitals",
+    "migratedFrom": "ANcpLua/vitals",
+    "migratedCommit": "acc815c7332a38ff2ba6fcf80763c893c157fac7"
+  },
+  "pipeline": {
+    "macos": {
+      "runner": "macos-15",
+      "stages": {
+        "check": [
+          {
+            "name": "package-manifest",
+            "run": ["swift", "package", "dump-package"]
+          },
+          {
+            "name": "app-plist",
+            "run": ["plutil", "-lint", "Info.plist"]
+          },
+          {
+            "name": "launchd-plist",
+            "run": ["plutil", "-lint", "launchd/dev.ancplua.vitals.plist"]
+          }
+        ],
+        "build": [
+          {
+            "name": "app-bundle",
+            "run": ["bash", "pack.sh", "{build}"]
+          }
+        ],
+        "test": [
+          {
+            "name": "kernel-selftest",
+            "run": ["swift", "run", "--scratch-path", "{build}/swift", "-c", "release", "selftest"]
+          },
+          {
+            "name": "claude-selftest",
+            "run": ["swift", "run", "--scratch-path", "{build}/swift", "-c", "release", "claude-selftest"]
+          },
+          {
+            "name": "signature",
+            "run": ["codesign", "--verify", "--deep", "--strict", "{build}/Vitals.app"]
+          }
+        ],
+        "smoke": [
+          {
+            "name": "packaged-snapshot",
+            "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "Vitals.app/Contents/MacOS/vitals", "--", "snapshot"]
+          }
+        ]
+      }
+    }
+  },
+  "package": {
+    "files": [
+      {
+        "source": "{build}/Vitals.app",
+        "destination": "Vitals.app"
+      },
+      {
+        "source": "launchd/dev.ancplua.vitals.plist",
+        "destination": "services/macos/dev.ancplua.vitals.plist"
+      }
+    ]
+  },
+  "install": {
+    "links": [
+      {
+        "payload": "Vitals.app",
+        "target": "~/Applications/Vitals.app"
+      }
+    ],
+    "services": {
+      "macos": [
+        {
+          "template": "services/macos/dev.ancplua.vitals.plist",
+          "target": "~/Library/LaunchAgents/dev.ancplua.vitals.plist",
+          "id": "dev.ancplua.vitals"
+        }
+      ]
+    },
+    "health": {
+      "macos": [
+        {
+          "name": "snapshot",
+          "run": ["{current}/Vitals.app/Contents/MacOS/vitals", "snapshot"]
+        }
+      ]
+    }
+  }
+}

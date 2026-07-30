@@ -6,7 +6,7 @@
     <string>dev.ancplua.disk-guard</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/ancplua/.local/bin/disk-guardd</string>
+        <string>{current}/bin/disk-guardd</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -18,11 +18,11 @@
     <key>RunAtLoad</key>
     <false/>
     <key>StandardErrorPath</key>
-    <string>/Users/ancplua/Library/Logs/disk-guard.err</string>
+    <string>{home}/Library/Logs/disk-guard.err</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/ancplua/.dotnet:/Users/ancplua/Library/pnpm:/Users/ancplua/.local/bin</string>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:{home}/.dotnet:{home}/Library/pnpm:{home}/.local/bin</string>
     </dict>
 </dict>
 </plist>

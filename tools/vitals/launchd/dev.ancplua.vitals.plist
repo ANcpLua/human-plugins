@@ -6,7 +6,7 @@
     <string>dev.ancplua.vitals</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Applications/Vitals.app/Contents/MacOS/vitals</string>
+        <string>{current}/Vitals.app/Contents/MacOS/vitals</string>
         <string>bar</string>
     </array>
     <key>RunAtLoad</key>

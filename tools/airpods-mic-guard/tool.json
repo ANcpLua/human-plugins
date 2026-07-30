@@ -1,0 +1,83 @@
+{
+  "$schema": "../../pipeline/tool.schema.json",
+  "schemaVersion": 1,
+  "id": "airpods-mic-guard",
+  "displayName": "AirPods Mic Guard",
+  "summary": "Keeps AirPods on hi-fi output until an application actually owns the microphone.",
+  "status": "active",
+  "kind": "daemon",
+  "license": "MIT",
+  "platforms": ["macos"],
+  "source": {
+    "repository": "ANcpLua/human-plugins",
+    "path": "tools/airpods-mic-guard"
+  },
+  "pipeline": {
+    "macos": {
+      "runner": "macos-15",
+      "stages": {
+        "check": [
+          {
+            "name": "typecheck",
+            "run": ["swiftc", "-warnings-as-errors", "-typecheck", "src/airpods-mic-guardd.swift", "-framework", "CoreAudio"]
+          }
+        ],
+        "build": [
+          {
+            "name": "compile",
+            "run": ["swiftc", "-O", "-o", "{build}/airpods-mic-guardd", "src/airpods-mic-guardd.swift", "-framework", "CoreAudio"]
+          }
+        ],
+        "test": [
+          {
+            "name": "state-machine",
+            "run": ["{build}/airpods-mic-guardd", "--self-test"]
+          }
+        ],
+        "smoke": [
+          {
+            "name": "packaged-state-machine",
+            "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/airpods-mic-guardd", "--", "--self-test"]
+          }
+        ]
+      }
+    }
+  },
+  "package": {
+    "files": [
+      {
+        "source": "{build}/airpods-mic-guardd",
+        "destination": "bin/airpods-mic-guardd"
+      },
+      {
+        "source": "launchd/com.ancplua.airpods-mic-guard.plist",
+        "destination": "services/macos/com.ancplua.airpods-mic-guard.plist"
+      }
+    ]
+  },
+  "install": {
+    "links": [
+      {
+        "payload": "bin/airpods-mic-guardd",
+        "target": "~/.local/bin/airpods-mic-guardd"
+      }
+    ],
+    "services": {
+      "macos": [
+        {
+          "template": "services/macos/com.ancplua.airpods-mic-guard.plist",
+          "target": "~/Library/LaunchAgents/com.ancplua.airpods-mic-guard.plist",
+          "id": "com.ancplua.airpods-mic-guard"
+        }
+      ]
+    },
+    "health": {
+      "macos": [
+        {
+          "name": "state-machine",
+          "run": ["{current}/bin/airpods-mic-guardd", "--self-test"]
+        }
+      ]
+    }
+  }
+}

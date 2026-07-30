@@ -1,0 +1,102 @@
+name: Signed release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - run: |
+          python3 -m unittest discover -s tests -v
+          ./toolctl validate
+      - id: matrix
+        run: echo "value=$(./toolctl matrix --json)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - run: ./toolctl verify --tool "${{ matrix.tool }}" --platform "${{ matrix.platform }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: package-${{ matrix.tool }}-${{ matrix.platform }}
+          path: |
+            .artifacts/packages/${{ matrix.tool }}-${{ matrix.platform }}.tar.gz
+            .artifacts/packages/${{ matrix.tool }}-${{ matrix.platform }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: package-*
+          path: release-assets
+          merge-multiple: true
+      - name: Build immutable release index
+        id: release
+        env:
+          COMMIT: ${{ github.sha }}
+        run: |
+          tag="build-${COMMIT:0:12}"
+          ./toolctl release-index --directory release-assets --commit "$COMMIT" --tag "$tag"
+          cp catalog.json release-assets/catalog.json
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Attest packages
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373
+        with:
+          subject-path: release-assets/*.tar.gz
+      - name: Publish immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq .object.sha 2>/dev/null || true)"
+          if [[ -n "$existing" ]]; then
+            [[ "$existing" == "$COMMIT" ]] || {
+              echo "tag $TAG points to $existing, expected $COMMIT" >&2
+              exit 1
+            }
+            echo "$TAG already exists for this commit"
+          else
+            gh release create "$TAG" release-assets/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$COMMIT" \
+              --title "$TAG" \
+              --notes "Verified host-tool snapshot for commit $COMMIT." \
+              --latest
+          fi

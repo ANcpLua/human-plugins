@@ -8,7 +8,7 @@
 	<string>Background</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/ancplua/.local/bin/airpods-mic-guardd</string>
+		<string>{current}/bin/airpods-mic-guardd</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
@@ -17,6 +17,6 @@
 	<key>ThrottleInterval</key>
 	<integer>10</integer>
 	<key>StandardErrorPath</key>
-	<string>/Users/ancplua/Library/Logs/airpods-mic-guard.log</string>
+	<string>{home}/Library/Logs/airpods-mic-guard.log</string>
 </dict>
 </plist>

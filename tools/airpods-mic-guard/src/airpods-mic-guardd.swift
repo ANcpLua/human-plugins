@@ -34,6 +34,40 @@ let queue = DispatchQueue(label: "dev.ancplua.airpods-mic-guard")
 let graceSeconds: TimeInterval = 15
 let killSwitch = NSString(string: "~/.airpods-guard-off").expandingTildeInPath
 
+func shouldArmGrace(
+    airPodsAreInput: Bool,
+    airPodsAreOutput: Bool,
+    microphoneIsOwned: Bool,
+    killSwitchIsActive: Bool
+) -> Bool {
+    airPodsAreInput
+        && airPodsAreOutput
+        && !microphoneIsOwned
+        && !killSwitchIsActive
+}
+
+if CommandLine.arguments.dropFirst() == ["--self-test"] {
+    let cases = [
+        (true, true, false, false, true),
+        (false, true, false, false, false),
+        (true, false, false, false, false),
+        (true, true, true, false, false),
+        (true, true, false, true, false),
+    ]
+    for (input, output, owned, disabled, expected) in cases {
+        precondition(
+            shouldArmGrace(
+                airPodsAreInput: input,
+                airPodsAreOutput: output,
+                microphoneIsOwned: owned,
+                killSwitchIsActive: disabled
+            ) == expected
+        )
+    }
+    print("airpods-mic-guard self-test: ok")
+    exit(0)
+}
+
 let tsFormatter: DateFormatter = {
     let f = DateFormatter()
     f.dateFormat = "yyyy-MM-dd HH:mm:ss"
@@ -161,14 +195,15 @@ func cancelGrace(_ reason: String? = nil) {
 /// True while AirPods are both default output and default input (the bad HFP
 /// state) with nobody actually using the mic.
 func guardConditionHolds() -> Bool {
-    guard !FileManager.default.fileExists(atPath: killSwitch) else { return false }
     guard let inDev = defaultDevice(kAudioHardwarePropertyDefaultInputDevice),
           let outDev = defaultDevice(kAudioHardwarePropertyDefaultOutputDevice)
     else { return false }
-    guard deviceName(inDev).lowercased().contains("airpod"),
-          deviceName(outDev).lowercased().contains("airpod")
-    else { return false }
-    return !micIsOwned(inDev)
+    return shouldArmGrace(
+        airPodsAreInput: deviceName(inDev).lowercased().contains("airpod"),
+        airPodsAreOutput: deviceName(outDev).lowercased().contains("airpod"),
+        microphoneIsOwned: micIsOwned(inDev),
+        killSwitchIsActive: FileManager.default.fileExists(atPath: killSwitch)
+    )
 }
 
 func evaluate() {

@@ -1,2 +1,6 @@
 .DS_Store
-tools/airpods-mic-guard/airpods-mic-guardd
+.artifacts/
+**/.build/
+**/.swiftpm/
+**/__pycache__/
+*.pyc

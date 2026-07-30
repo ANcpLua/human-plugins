@@ -2,6 +2,23 @@
 
 Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest entry first.
 
+## Unreleased
+
+### Added
+- Manifest-driven check, build, test, package, smoke, isolated deploy, health,
+  and rollback orchestration.
+- Deterministic release packages, SHA-256 records, GitHub artifact attestations,
+  failure diagnostics, and an atomic updater.
+
+### Changed
+- This repository is now the source of truth for Vitals and Disk Guard.
+- Heizöl Monitor is a dependency-free macOS/Linux daemon instead of a thin
+  wrapper around the generic whcli/Tauri product.
+
+### Removed
+- Federated ownership, the retired Heizöl shell, and the AirPods polling-era
+  implementation.
+
 ## [1.3.0] - 2026-07-30
 
 ### Added

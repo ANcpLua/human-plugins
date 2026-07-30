@@ -2,6 +2,15 @@
 
 Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest entry first.
 
+## Unreleased
+
+### Added
+- Pure state-machine self-test, deterministic package, installed health check,
+  and atomic rollback exercise.
+
+### Removed
+- The polling-era shell and helper sources. Git history remains the archive.
+
 ## [2.0.1] - 2026-07-30
 
 ### Changed

@@ -1,21 +1,68 @@
 # human-plugins
 
-AI-maintained monorepo of background tools ("human plugins") for the owner's
-macOS host and peripherals. Not written for human consumption — agents read
-[CLAUDE.md](CLAUDE.md) first (mandatory drift check), then the per-tool docs.
-The machine-readable ownership and federation map is
-[catalog.json](catalog.json); CI validates every local/external link and every
-federated backlink on push, pull request, and every five minutes.
+[![CI](https://github.com/ANcpLua/human-plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/ANcpLua/human-plugins/actions/workflows/ci.yml)
+[![Signed release](https://github.com/ANcpLua/human-plugins/actions/workflows/release.yml/badge.svg)](https://github.com/ANcpLua/human-plugins/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+AI-first source of truth for Alex's small macOS and Linux host tools. Each tool
+declares one complete path from source to a deterministic release in
+[`tool.json`](pipeline/tool.schema.json):
+
+```text
+check → build → test → package → smoke → isolated deploy → health → rollback
+                                                           │
+                       GitHub attestation + SHA-256 ────────┘
+```
 
 ## Tools
 
-| Tool | What it does | Entry points |
+| Tool | Platforms | Purpose |
 |---|---|---|
-| [airpods-mic-guard](tools/airpods-mic-guard/README.md) | Event-driven CoreAudio daemon that keeps AirPods in hi-fi A2DP while listening, yields the mic during real calls | [Source](tools/airpods-mic-guard/src/airpods-mic-guardd.swift) · [CLAUDE.md](tools/airpods-mic-guard/CLAUDE.md) · [CHANGELOG.md](tools/airpods-mic-guard/CHANGELOG.md) |
-| [heizoel-monitor](tools/heizoel-monitor/README.md) | Heating-oil price monitor (retired; script lost with its parent repo) | [CLAUDE.md](tools/heizoel-monitor/CLAUDE.md) · [CHANGELOG.md](tools/heizoel-monitor/CHANGELOG.md) |
-| [vitals](tools/vitals/README.md) | Menu-bar CPU/memory/disk monitor (federated: code in [ANcpLua/vitals](https://github.com/ANcpLua/vitals); deployment tracked here) | [CLAUDE.md](tools/vitals/CLAUDE.md) · [CHANGELOG.md](tools/vitals/CHANGELOG.md) |
-| [disk-guard](tools/disk-guard/README.md) | Threshold-triggered disk cleanup: daily launchd check, prunes an allowlist of regenerable data only when free space < 25 GiB (federated: code in [ANcpLua/disk-guard](https://github.com/ANcpLua/disk-guard); deployment tracked here) | [CLAUDE.md](tools/disk-guard/CLAUDE.md) · [CHANGELOG.md](tools/disk-guard/CHANGELOG.md) |
+| [airpods-mic-guard](tools/airpods-mic-guard/README.md) | macOS | Keeps AirPods on hi-fi output until an app owns the microphone |
+| [disk-guard](tools/disk-guard/README.md) | macOS | Reclaims only allowlisted derived data below a disk threshold |
+| [heizoel-monitor](tools/heizoel-monitor/README.md) | macOS, Linux | Finds matching heating-oil listings and notifies through ntfy |
+| [vitals](tools/vitals/README.md) | macOS | Native menu-bar CPU, memory, disk, process, and Claude telemetry |
 
-Repo-level history: [CHANGELOG.md](CHANGELOG.md).
+[`catalog.json`](catalog.json) is the generated machine index. `AGENTS.md` is
+the repository contract.
 
-Candidates not yet onboarded: `memcheck`, `cc8` (both in `~/.local/bin`).
+## Verify
+
+```bash
+./toolctl validate
+./toolctl list
+./toolctl verify --tool airpods-mic-guard --platform macos
+```
+
+Every command is executed as an argv array without shell interpolation. Logs,
+packages, and checksums land in `.artifacts/`; CI preserves them when a job
+fails.
+
+## Install and update
+
+Build and install a local package:
+
+```bash
+./toolctl verify --tool airpods-mic-guard --platform macos
+./toolctl install \
+  --tool airpods-mic-guard \
+  --package .artifacts/packages/airpods-mic-guard-macos.tar.gz \
+  --release local
+```
+
+Install the latest public release:
+
+```bash
+./toolctl update --tool airpods-mic-guard
+```
+
+Remote updates are downloaded with `gh`, checked against the release SHA-256,
+verified with `gh attestation verify`, staged beside existing releases, and
+switched atomically. A failed installed health check restores the prior release.
+
+```bash
+./toolctl status --tool airpods-mic-guard
+./toolctl rollback --tool airpods-mic-guard
+```
+
+The project is free to use, fork, and modify under the [MIT License](LICENSE).

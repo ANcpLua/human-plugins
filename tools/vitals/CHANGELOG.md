@@ -1,8 +1,17 @@
-# Changelog — vitals (deployment record)
+# Changelog — Vitals
 
 Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest entry first.
-Code history lives in the canonical repo (github.com/ANcpLua/vitals); this file
-tracks the deployment on this host only.
+
+## Unreleased
+
+### Changed
+- Source ownership moved into `human-plugins`.
+- The app is built in an isolated scratch directory and installed under
+  `~/Applications` through the managed current-release link.
+
+### Added
+- Deterministic package, strict ad-hoc signature check, installed snapshot
+  health, and atomic rollback exercise.
 
 ## [catalog-linked] - 2026-07-30
 

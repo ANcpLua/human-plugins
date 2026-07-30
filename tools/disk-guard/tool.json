@@ -1,0 +1,97 @@
+{
+  "$schema": "../../pipeline/tool.schema.json",
+  "schemaVersion": 1,
+  "id": "disk-guard",
+  "displayName": "Disk Guard",
+  "summary": "Reclaims explicitly allowlisted derived data only when disk headroom is low.",
+  "status": "active",
+  "kind": "automation",
+  "license": "MIT",
+  "platforms": ["macos"],
+  "source": {
+    "repository": "ANcpLua/human-plugins",
+    "path": "tools/disk-guard",
+    "migratedFrom": "ANcpLua/disk-guard",
+    "migratedCommit": "386ab013ad0849a9112051442415f20bde5dad97"
+  },
+  "pipeline": {
+    "macos": {
+      "runner": "macos-15",
+      "stages": {
+        "check": [
+          {
+            "name": "syntax",
+            "run": ["zsh", "-n", "src/disk-guardd"]
+          },
+          {
+            "name": "launchd-plist",
+            "run": ["plutil", "-lint", "launchd/dev.ancplua.disk-guard.plist"]
+          }
+        ],
+        "build": [
+          {
+            "name": "stage-executable",
+            "run": ["/usr/bin/install", "-m", "755", "src/disk-guardd", "{build}/disk-guardd"]
+          }
+        ],
+        "test": [
+          {
+            "name": "threshold-noop",
+            "run": ["bash", "tests/threshold-noop.sh", "{build}/disk-guardd", "{build}/test-home"]
+          }
+        ],
+        "smoke": [
+          {
+            "name": "packaged-threshold-noop",
+            "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/disk-guardd"],
+            "env": {
+              "DISK_GUARD_THRESHOLD_GB": "0",
+              "HOME": "{build}/smoke-home"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "package": {
+    "files": [
+      {
+        "source": "{build}/disk-guardd",
+        "destination": "bin/disk-guardd"
+      },
+      {
+        "source": "launchd/dev.ancplua.disk-guard.plist",
+        "destination": "services/macos/dev.ancplua.disk-guard.plist"
+      }
+    ]
+  },
+  "install": {
+    "links": [
+      {
+        "payload": "bin/disk-guardd",
+        "target": "~/.local/bin/disk-guardd"
+      }
+    ],
+    "services": {
+      "macos": [
+        {
+          "template": "services/macos/dev.ancplua.disk-guard.plist",
+          "target": "~/Library/LaunchAgents/dev.ancplua.disk-guard.plist",
+          "id": "dev.ancplua.disk-guard"
+        }
+      ]
+    },
+    "health": {
+      "macos": [
+        {
+          "name": "threshold-noop",
+          "run": ["{current}/bin/disk-guardd"],
+          "env": {
+            "DISK_GUARD_THRESHOLD_GB": "0",
+            "HOME": "{home}"
+          }
+        }
+      ]
+    }
+  }
+}

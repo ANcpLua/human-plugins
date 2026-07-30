@@ -1,33 +1,48 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "source": "tools/*/tool.json",
+  "repository": "https://github.com/ANcpLua/human-plugins",
   "tools": [
     {
-      "name": "airpods-mic-guard",
-      "status": "active",
-      "ownership": "embedded",
-      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/airpods-mic-guard",
-      "canonicalRepository": "https://github.com/ANcpLua/human-plugins"
+      "id": "airpods-mic-guard",
+      "displayName": "AirPods Mic Guard",
+      "summary": "Keeps AirPods on hi-fi output until an application actually owns the microphone.",
+      "kind": "daemon",
+      "platforms": [
+        "macos"
+      ],
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/airpods-mic-guard"
     },
     {
-      "name": "heizoel-monitor",
-      "status": "retired-source-unavailable",
-      "ownership": "retired",
-      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/heizoel-monitor",
-      "canonicalRepository": null
+      "id": "disk-guard",
+      "displayName": "Disk Guard",
+      "summary": "Reclaims explicitly allowlisted derived data only when disk headroom is low.",
+      "kind": "automation",
+      "platforms": [
+        "macos"
+      ],
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/disk-guard"
     },
     {
-      "name": "vitals",
-      "status": "active",
-      "ownership": "federated",
-      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/vitals",
-      "canonicalRepository": "https://github.com/ANcpLua/vitals"
+      "id": "heizoel-monitor",
+      "displayName": "Heizöl Monitor",
+      "summary": "Finds matching heating-oil listings without periodic request fingerprints and notifies through ntfy.",
+      "kind": "daemon",
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/heizoel-monitor"
     },
     {
-      "name": "disk-guard",
-      "status": "active",
-      "ownership": "federated",
-      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/disk-guard",
-      "canonicalRepository": "https://github.com/ANcpLua/disk-guard"
+      "id": "vitals",
+      "displayName": "Vitals",
+      "summary": "Native macOS menu-bar telemetry for CPU, memory pressure, disk, processes, and Claude usage.",
+      "kind": "app",
+      "platforms": [
+        "macos"
+      ],
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/vitals"
     }
   ]
 }
