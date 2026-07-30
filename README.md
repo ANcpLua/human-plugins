@@ -10,7 +10,7 @@ declares one complete path from source to a deterministic release in
 
 ```text
 check → build → test → package → smoke → isolated deploy → health → rollback
-                                                           │
+                                                            │
                        GitHub attestation + SHA-256 ────────┘
 ```
 
