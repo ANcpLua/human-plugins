@@ -3,6 +3,9 @@
 Event-driven macOS daemon that keeps AirPods in hi-fi A2DP while listening and
 yields the microphone during real calls.
 
+Canonical source and deployment record:
+[ANcpLua/human-plugins/tools/airpods-mic-guard](https://github.com/ANcpLua/human-plugins/tree/main/tools/airpods-mic-guard).
+
 ## The forever-lasting problem
 
 Bluetooth cannot do hi-fi output (A2DP) and microphone input simultaneously on

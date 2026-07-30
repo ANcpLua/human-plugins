@@ -2,6 +2,12 @@
 
 Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest entry first.
 
+## [2.0.1] - 2026-07-30
+
+### Changed
+- README now identifies and links its canonical source location in the public
+  human-plugins catalog; the repository-wide link-integrity gate validates it.
+
 ## [2.0.0] - 2026-07-10
 
 ### Changed

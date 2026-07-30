@@ -3,10 +3,10 @@
 Read root `../../CLAUDE.md` first (mandatory drift check). History in
 [CHANGELOG.md](CHANGELOG.md), newest entry first.
 
-**Federated tool**: source of truth for code is **github.com/ANcpLua/disk-guard**
-(private). There is no standing local clone — clone on demand, work, push,
-delete the clone. Code changes happen THERE. This entry owns only the
-deployment record.
+**Federated tool**: source of truth for code is
+**[ANcpLua/disk-guard](https://github.com/ANcpLua/disk-guard)**. Its canonical
+local checkout is `~/disk-guard`. Code changes happen THERE. This entry owns
+only the deployment record.
 
 Rules:
 - The repo copy `launchd/dev.ancplua.disk-guard.plist` must stay

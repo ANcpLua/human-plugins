@@ -7,10 +7,11 @@ persistence, no network.
 
 ## Canonical home
 
-Source, build, and installer: **github.com/ANcpLua/vitals** (no standing local
-clone — clone on demand, work, push, delete). This monorepo entry does NOT vendor the source —
-vitals predates human-plugins and has its own healthy repo/history. Here we
-track only what makes it a "human plugin": the login-item deployment.
+Source, build, and installer: **[ANcpLua/vitals](https://github.com/ANcpLua/vitals)**.
+The canonical local checkout is `~/RiderProjects/qyl-workspace/vitals`. This
+monorepo entry does NOT vendor the source — vitals predates human-plugins and
+has its own healthy repo/history. Here we track only what makes it a "human
+plugin": the login-item deployment.
 
 ## Deployment (what this entry tracks)
 

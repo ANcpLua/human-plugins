@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "tools": [
+    {
+      "name": "airpods-mic-guard",
+      "status": "active",
+      "ownership": "embedded",
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/airpods-mic-guard",
+      "canonicalRepository": "https://github.com/ANcpLua/human-plugins"
+    },
+    {
+      "name": "heizoel-monitor",
+      "status": "retired-source-unavailable",
+      "ownership": "retired",
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/heizoel-monitor",
+      "canonicalRepository": null
+    },
+    {
+      "name": "vitals",
+      "status": "active",
+      "ownership": "federated",
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/vitals",
+      "canonicalRepository": "https://github.com/ANcpLua/vitals"
+    },
+    {
+      "name": "disk-guard",
+      "status": "active",
+      "ownership": "federated",
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/disk-guard",
+      "canonicalRepository": "https://github.com/ANcpLua/disk-guard"
+    }
+  ]
+}

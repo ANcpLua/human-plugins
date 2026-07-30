@@ -4,6 +4,14 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 Code history lives in the canonical repo (github.com/ANcpLua/vitals); this file
 tracks the deployment on this host only.
 
+## [catalog-linked] - 2026-07-30
+
+### Changed
+- Canonical repository and collection entry now link to each other and are
+  enforced by the repository-wide hourly link-integrity gate.
+- Replaced the obsolete no-standing-clone instruction with the actual
+  canonical checkout at `~/RiderProjects/qyl-workspace/vitals`.
+
 ## [no-local-clone] - 2026-07-10
 
 ### Changed

@@ -20,7 +20,7 @@ scripts/drift-check.sh
 
 Drift means: uncommitted changes, a commit that touched a tool without
 updating that tool's CHANGELOG.md, or installed artifacts (binaries, launchd
-plists) that differ from the repo copies.
+plists) that differ from the repo copies, or a broken catalog/federation link.
 
 ## Drift Report template
 
@@ -55,6 +55,19 @@ ask.>
   the same commit (drift-check enforces this).
 - Repo-level structural changes go in the root `CHANGELOG.md`.
 
+## Repository and link integrity
+
+- `catalog.json` is the exhaustive ownership map. Every directory under
+  `tools/` appears exactly once as embedded, federated, or retired.
+- Federated tool READMEs link to their canonical repository, and each
+  canonical README links back to the exact collection entry.
+- Run `python3 scripts/validate-links.py` before every commit. GitHub Actions
+  runs the same validator on pushes, pull requests, and hourly; scheduled
+  failures open an issue and a later successful run closes it.
+- A repository rename, visibility change, transfer, deletion, default-branch
+  change, or collection move is incomplete until `catalog.json`, both
+  directions of documentation, and the validator all pass.
+
 ## Design doctrine (applies to every tool)
 
 - Event-driven over polling. Processes sleep until an event arrives.
@@ -68,9 +81,9 @@ ask.>
 
 ## Index
 
-| Tool | Docs | Status |
-|---|---|---|
-| airpods-mic-guard | [README](tools/airpods-mic-guard/README.md) · [CLAUDE](tools/airpods-mic-guard/CLAUDE.md) · [CHANGELOG](tools/airpods-mic-guard/CHANGELOG.md) | active (launchd daemon) |
-| heizoel-monitor | [README](tools/heizoel-monitor/README.md) · [CLAUDE](tools/heizoel-monitor/CLAUDE.md) · [CHANGELOG](tools/heizoel-monitor/CHANGELOG.md) | retired 2026-07-10 |
-| vitals | [README](tools/vitals/README.md) · [CLAUDE](tools/vitals/CLAUDE.md) · [CHANGELOG](tools/vitals/CHANGELOG.md) | active (federated — code in github.com/ANcpLua/vitals) |
-| disk-guard | [README](tools/disk-guard/README.md) · [CLAUDE](tools/disk-guard/CLAUDE.md) · [CHANGELOG](tools/disk-guard/CHANGELOG.md) | active (federated — code in github.com/ANcpLua/disk-guard, private) |
+| Tool | Source | Docs | Status |
+|---|---|---|---|
+| airpods-mic-guard | [embedded source](tools/airpods-mic-guard/src/airpods-mic-guardd.swift) | [README](tools/airpods-mic-guard/README.md) · [CLAUDE](tools/airpods-mic-guard/CLAUDE.md) · [CHANGELOG](tools/airpods-mic-guard/CHANGELOG.md) | active (launchd daemon) |
+| heizoel-monitor | retired; source unavailable | [README](tools/heizoel-monitor/README.md) · [CLAUDE](tools/heizoel-monitor/CLAUDE.md) · [CHANGELOG](tools/heizoel-monitor/CHANGELOG.md) | retired 2026-07-10 |
+| vitals | [ANcpLua/vitals](https://github.com/ANcpLua/vitals) | [README](tools/vitals/README.md) · [CLAUDE](tools/vitals/CLAUDE.md) · [CHANGELOG](tools/vitals/CHANGELOG.md) | active (federated) |
+| disk-guard | [ANcpLua/disk-guard](https://github.com/ANcpLua/disk-guard) | [README](tools/disk-guard/README.md) · [CLAUDE](tools/disk-guard/CLAUDE.md) · [CHANGELOG](tools/disk-guard/CHANGELOG.md) | active (federated) |

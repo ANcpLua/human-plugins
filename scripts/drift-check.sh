@@ -59,6 +59,11 @@ check_installed tools/disk-guard/launchd/dev.ancplua.disk-guard.plist \
   drift=1
 }
 
+if (( ! drift )) && ! python3 scripts/validate-links.py; then
+  echo "DRIFT: repository catalog or link integrity failed"
+  drift=1
+fi
+
 if (( drift )); then
   echo
   echo "DRIFT FOUND — STOP. Produce a Drift Report (root CLAUDE.md) before any other work."

@@ -4,6 +4,14 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 Code history lives in the canonical repo (github.com/ANcpLua/disk-guard); this
 file tracks the deployment on this host only.
 
+## [catalog-linked] - 2026-07-30
+
+### Changed
+- Canonical repository and collection entry now link to each other and are
+  enforced by the repository-wide hourly link-integrity gate.
+- Repository is public after a zero-finding full-history secret scan; the
+  canonical local checkout is `~/disk-guard`.
+
 ## [redeployed] - 2026-07-28
 
 ### Changed

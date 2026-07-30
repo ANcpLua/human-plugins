@@ -12,9 +12,10 @@ this agent prevents the regrowth from ever requiring that exercise again.
 
 ## Canonical home
 
-Source, allowlist policy, and installer: **github.com/ANcpLua/disk-guard**
-(private; no standing local clone — clone on demand, work, push, delete).
-This monorepo entry tracks only the deployment.
+Source, allowlist policy, and installer:
+**[ANcpLua/disk-guard](https://github.com/ANcpLua/disk-guard)**. The canonical
+local checkout is `~/disk-guard`. This monorepo entry tracks only the
+deployment.
 
 ## Deployment (what this entry tracks)
 

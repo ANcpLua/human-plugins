@@ -2,6 +2,20 @@
 
 Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest entry first.
 
+## [1.3.0] - 2026-07-30
+
+### Added
+- Exhaustive `catalog.json` ownership map for embedded, federated, and retired
+  tools.
+- Local/external URL and reciprocal-federation validator, enforced by GitHub
+  Actions on every push and pull request plus hourly. Scheduled failures open
+  an issue; successful recovery closes it.
+
+### Changed
+- `human-plugins`, `vitals`, and `disk-guard` are public after full-history
+  secret scans returned zero findings, so all catalog links work without a
+  cross-repository credential.
+
 ## [1.2.0] - 2026-07-25
 
 ### Added
