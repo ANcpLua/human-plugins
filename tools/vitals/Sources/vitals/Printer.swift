@@ -60,16 +60,6 @@ enum Printer {
         FileHandle.standardOutput.write(Data("\n".utf8))
     }
 
-    static func diskScan(_ scan: DiskScan) {
-        out("disk scan \(scan.root)")
-        out("  \(scan.scannedFiles) files   \(Format.gib(scan.totalBytes)) total   \(scan.unreadable) unreadable")
-        out("")
-        for entry in scan.entries {
-            let mark = entry.isDirectory ? "/" : ""
-            out("\(Format.gib(entry.bytes))  \(entry.name)\(mark)")
-        }
-    }
-
     static func describe(_ error: MetricsError) -> String {
         switch error {
         case let .syscall(name, code): "error syscall \(name) code \(code)"

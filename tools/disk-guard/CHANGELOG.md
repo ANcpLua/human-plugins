@@ -8,6 +8,7 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 - Source ownership moved into `human-plugins`.
 - Launchd paths are rendered by the atomic installer instead of containing a
   fixed username.
+- Launchd classifies cleanup as background, low-priority filesystem I/O.
 
 ### Added
 - Threshold no-op test, deterministic package, installed health check, and

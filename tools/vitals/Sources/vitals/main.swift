@@ -51,17 +51,6 @@ case "json":
         exit(1)
     }
 
-case "disk":
-    let path = arguments.dropFirst().first(where: { !$0.hasPrefix("-") }) ?? ProcessInfo.processInfo.environment["HOME"] ?? "/"
-    let asJson = arguments.contains("--json")
-    switch Scanner.scan(root: path, top: 25) {
-    case let .success(scan):
-        asJson ? Printer.json(scan) : Printer.diskScan(scan)
-    case let .failure(error):
-        Printer.failure(error)
-        exit(1)
-    }
-
 case "watch":
     let interval = arguments.dropFirst().first.flatMap(Double.init) ?? 2.0
     let diskGB = arguments.dropFirst(2).first.flatMap(Double.init) ?? 10.0
@@ -97,6 +86,6 @@ case "bar":
     application.run()
 
 default:
-    Printer.err("usage: vitals [snapshot | json | predict <pid> | watch [s] [diskGB] | disk [path] | bar]")
+    Printer.err("usage: vitals [snapshot | json | predict <pid> | watch [s] [diskGB] | bar]")
     exit(2)
 }

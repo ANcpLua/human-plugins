@@ -4,6 +4,11 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 
 ## Unreleased
 
+### Removed
+- The duplicate `vitals disk` filesystem walker. GNU `du` remains the
+  canonical manual disk-usage scanner while Vitals retains constant-time disk
+  headroom telemetry.
+
 ### Changed
 - Source ownership moved into `human-plugins`.
 - The app is built in an isolated scratch directory and installed under

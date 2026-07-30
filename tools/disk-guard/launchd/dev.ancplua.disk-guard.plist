@@ -17,6 +17,10 @@
     </dict>
     <key>RunAtLoad</key>
     <false/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
     <key>StandardErrorPath</key>
     <string>{home}/Library/Logs/disk-guard.err</string>
     <key>EnvironmentVariables</key>
