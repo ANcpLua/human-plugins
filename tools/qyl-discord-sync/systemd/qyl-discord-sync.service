@@ -1,0 +1,9 @@
+[Unit]
+Description=Mirror upstream documentation into Discord
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-%h/.config/human-plugins/qyl-discord-sync.env
+ExecStart=/usr/bin/env python3 {current}/bin/qyl-discord-sync sync

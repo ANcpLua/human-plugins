@@ -1,0 +1,55 @@
+{
+  "$schema": "../../pipeline/tool.schema.json",
+  "schemaVersion": 1,
+  "id": "hammerspoon-claude-launcher",
+  "displayName": "Hammerspoon Claude Launcher",
+  "summary": "Launches an agent in Ghostty from Ctrl-middle-click and tiles only the terminal windows it created.",
+  "status": "active",
+  "kind": "automation",
+  "license": "MIT",
+  "platforms": ["macos"],
+  "source": {
+    "repository": "ANcpLua/human-plugins",
+    "path": "tools/hammerspoon-claude-launcher",
+    "migratedFrom": "ANcpLua/hammerspoon-setup",
+    "migratedCommit": "cb79cd60b8628a8b65c98fa21b97fd8ff5de42fc"
+  },
+  "pipeline": {
+    "macos": {
+      "runner": "macos-15",
+      "stages": {
+        "check": [
+          {"name": "compile-doctor", "run": ["python3", "-m", "py_compile", "src/doctor.py"]},
+          {"name": "validate-lua-contract", "run": ["python3", "src/doctor.py", "share/init.lua"]}
+        ],
+        "build": [
+          {"name": "stage-doctor", "run": ["/usr/bin/install", "-m", "755", "src/doctor.py", "{build}/hammerspoon-claude-launcher-doctor"]}
+        ],
+        "test": [
+          {"name": "unit", "run": ["python3", "-m", "unittest", "discover", "-s", "tests"], "env": {"PYTHONPATH": "src"}}
+        ],
+        "smoke": [
+          {"name": "packaged-doctor", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/hammerspoon-claude-launcher-doctor"]}
+        ]
+      }
+    }
+  },
+  "package": {
+    "files": [
+      {"source": "{build}/hammerspoon-claude-launcher-doctor", "destination": "bin/hammerspoon-claude-launcher-doctor"},
+      {"source": "share/init.lua", "destination": "share/init.lua"}
+    ]
+  },
+  "install": {
+    "links": [
+      {"payload": "bin/hammerspoon-claude-launcher-doctor", "target": "~/.local/bin/hammerspoon-claude-launcher-doctor"},
+      {"payload": "share/init.lua", "target": "~/.hammerspoon/init.lua"}
+    ],
+    "services": {},
+    "health": {
+      "macos": [
+        {"name": "installed-config", "run": ["{current}/bin/hammerspoon-claude-launcher-doctor", "{home}/.hammerspoon/init.lua"]}
+      ]
+    }
+  }
+}

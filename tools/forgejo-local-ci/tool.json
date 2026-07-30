@@ -1,0 +1,73 @@
+{
+  "$schema": "../../pipeline/tool.schema.json",
+  "schemaVersion": 1,
+  "id": "forgejo-local-ci",
+  "displayName": "Forgejo Local CI",
+  "summary": "Runs an isolated local Forgejo and containerized Actions runner without exposing a public self-hosted runner.",
+  "status": "active",
+  "kind": "sandbox",
+  "license": "MIT",
+  "platforms": ["macos", "linux"],
+  "source": {
+    "repository": "ANcpLua/human-plugins",
+    "path": "tools/forgejo-local-ci",
+    "migratedFrom": "ANcpLua/forgejo-local-ci",
+    "migratedCommit": "e9c3809582c2fe568d21af045c3f8457385f0507"
+  },
+  "pipeline": {
+    "macos": {
+      "runner": "macos-15",
+      "stages": {
+        "check": [
+          {"name": "compile", "run": ["python3", "-m", "py_compile", "src/forgejo_local_ci.py"]}
+        ],
+        "build": [
+          {"name": "stage-cli", "run": ["/usr/bin/install", "-m", "755", "src/forgejo_local_ci.py", "{build}/forgejo-local-ci"]}
+        ],
+        "test": [
+          {"name": "unit", "run": ["python3", "-m", "unittest", "discover", "-s", "tests"], "env": {"PYTHONPATH": "src"}}
+        ],
+        "smoke": [
+          {"name": "packaged-self-test", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/forgejo-local-ci", "--", "self-test"]}
+        ]
+      }
+    },
+    "linux": {
+      "runner": "ubuntu-24.04",
+      "stages": {
+        "check": [
+          {"name": "compile", "run": ["python3", "-m", "py_compile", "src/forgejo_local_ci.py"]}
+        ],
+        "build": [
+          {"name": "stage-cli", "run": ["/usr/bin/install", "-m", "755", "src/forgejo_local_ci.py", "{build}/forgejo-local-ci"]}
+        ],
+        "test": [
+          {"name": "unit", "run": ["python3", "-m", "unittest", "discover", "-s", "tests"], "env": {"PYTHONPATH": "src"}}
+        ],
+        "smoke": [
+          {"name": "packaged-self-test", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/forgejo-local-ci", "--", "self-test"]}
+        ]
+      }
+    }
+  },
+  "package": {
+    "files": [
+      {"source": "{build}/forgejo-local-ci", "destination": "bin/forgejo-local-ci"},
+      {"source": "share/compose.yaml", "destination": "share/compose.yaml"}
+    ]
+  },
+  "install": {
+    "links": [
+      {"payload": "bin/forgejo-local-ci", "target": "~/.local/bin/forgejo-local-ci"}
+    ],
+    "services": {},
+    "health": {
+      "macos": [
+        {"name": "self-test", "run": ["{current}/bin/forgejo-local-ci", "self-test"]}
+      ],
+      "linux": [
+        {"name": "self-test", "run": ["{current}/bin/forgejo-local-ci", "self-test"]}
+      ]
+    }
+  }
+}

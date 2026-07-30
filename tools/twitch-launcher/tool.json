@@ -1,0 +1,65 @@
+{
+  "$schema": "../../pipeline/tool.schema.json",
+  "schemaVersion": 1,
+  "id": "twitch-launcher",
+  "displayName": "Twitch Launcher",
+  "summary": "Shows configured Twitch channels and opens streams directly through Streamlink.",
+  "status": "active",
+  "kind": "app",
+  "license": "MIT",
+  "platforms": ["macos"],
+  "source": {
+    "repository": "ANcpLua/human-plugins",
+    "path": "tools/twitch-launcher",
+    "migratedFrom": "ANcpLua/onlyfitch",
+    "migratedCommit": "33f513351ce6f77564a2197ad2b0d29ee11258d9"
+  },
+  "pipeline": {
+    "macos": {
+      "runner": "macos-15",
+      "stages": {
+        "check": [
+          {"name": "package-model", "run": ["swift", "package", "dump-package"]},
+          {"name": "info-plist", "run": ["plutil", "-lint", "Resources/Info.plist"]}
+        ],
+        "build": [
+          {"name": "app-directories", "run": ["/bin/mkdir", "-p", "{build}/TwitchLauncher.app/Contents/MacOS", "{build}/TwitchLauncher.app/Contents/Resources"]},
+          {"name": "build-app", "run": ["swift", "build", "--configuration", "release", "--scratch-path", "{build}/swift", "--product", "TwitchLauncher"]},
+          {"name": "build-self-test", "run": ["swift", "build", "--configuration", "release", "--scratch-path", "{build}/swift", "--product", "twitch-launcher-self-test"]},
+          {"name": "stage-app", "run": ["/usr/bin/install", "-m", "755", "{build}/swift/release/TwitchLauncher", "{build}/TwitchLauncher.app/Contents/MacOS/TwitchLauncher"]},
+          {"name": "stage-self-test", "run": ["/usr/bin/install", "-m", "755", "{build}/swift/release/twitch-launcher-self-test", "{build}/twitch-launcher-self-test"]},
+          {"name": "stage-info", "run": ["/usr/bin/install", "-m", "644", "Resources/Info.plist", "{build}/TwitchLauncher.app/Contents/Info.plist"]},
+          {"name": "build-icon", "run": ["/usr/bin/iconutil", "--convert", "icns", "--output", "{build}/TwitchLauncher.app/Contents/Resources/AppIcon.icns", "Resources/AppIcon.iconset"]},
+          {"name": "sign-app", "run": ["/usr/bin/codesign", "--force", "--deep", "--sign", "-", "{build}/TwitchLauncher.app"]}
+        ],
+        "test": [
+          {"name": "model-self-test", "run": ["{build}/twitch-launcher-self-test"]},
+          {"name": "signature", "run": ["/usr/bin/codesign", "--verify", "--deep", "--strict", "{build}/TwitchLauncher.app"]}
+        ],
+        "smoke": [
+          {"name": "packaged-self-test", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/twitch-launcher-self-test"]},
+          {"name": "packaged-app", "run": ["python3", "{root}/pipeline/probe.py", "contains", "{package}", "apps/TwitchLauncher.app/Contents/MacOS/TwitchLauncher"]}
+        ]
+      }
+    }
+  },
+  "package": {
+    "files": [
+      {"source": "{build}/TwitchLauncher.app", "destination": "apps/TwitchLauncher.app"},
+      {"source": "{build}/twitch-launcher-self-test", "destination": "bin/twitch-launcher-self-test"}
+    ]
+  },
+  "install": {
+    "links": [
+      {"payload": "apps/TwitchLauncher.app", "target": "~/Applications/TwitchLauncher.app"},
+      {"payload": "bin/twitch-launcher-self-test", "target": "~/.local/bin/twitch-launcher-self-test"}
+    ],
+    "services": {},
+    "health": {
+      "macos": [
+        {"name": "self-test", "run": ["{current}/bin/twitch-launcher-self-test"]},
+        {"name": "signature", "run": ["/usr/bin/codesign", "--verify", "--deep", "--strict", "{current}/apps/TwitchLauncher.app"]}
+      ]
+    }
+  }
+}

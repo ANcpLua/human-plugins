@@ -1,0 +1,103 @@
+{
+  "$schema": "../../pipeline/tool.schema.json",
+  "schemaVersion": 1,
+  "id": "qyl-discord-sync",
+  "displayName": "qyl Discord Sync",
+  "summary": "Mirrors versioned upstream documentation into Discord channels with the channel itself as durable sync state.",
+  "status": "active",
+  "kind": "automation",
+  "license": "MIT",
+  "platforms": ["macos", "linux"],
+  "source": {
+    "repository": "ANcpLua/human-plugins",
+    "path": "tools/qyl-discord-sync",
+    "migratedFrom": "ANcpLua/qyl-discord-sync",
+    "migratedCommit": "f1f2513607b3f94cf464754cc06a3a87f333c2e4"
+  },
+  "pipeline": {
+    "macos": {
+      "runner": "macos-15",
+      "stages": {
+        "check": [
+          {"name": "compile", "run": ["python3", "-m", "py_compile", "src/qyl_discord_sync.py"]},
+          {"name": "launchd-plist", "run": ["plutil", "-lint", "launchd/com.ancplua.qyl-discord-sync.plist"]}
+        ],
+        "build": [
+          {"name": "stage-cli", "run": ["/usr/bin/install", "-m", "755", "src/qyl_discord_sync.py", "{build}/qyl-discord-sync"]}
+        ],
+        "test": [
+          {"name": "unit", "run": ["python3", "-m", "unittest", "discover", "-s", "tests"], "env": {"PYTHONPATH": "src"}}
+        ],
+        "smoke": [
+          {"name": "packaged-self-test", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/qyl-discord-sync", "--", "self-test"]}
+        ]
+      }
+    },
+    "linux": {
+      "runner": "ubuntu-24.04",
+      "stages": {
+        "check": [
+          {"name": "compile", "run": ["python3", "-m", "py_compile", "src/qyl_discord_sync.py"]},
+          {"name": "render-service", "run": ["python3", "{root}/pipeline/service.py", "systemd/qyl-discord-sync.service", "{build}/qyl-discord-sync.service", "--home", "/tmp/human-tools-home", "--current", "/tmp/human-tools-current"]},
+          {"name": "render-timer", "run": ["python3", "{root}/pipeline/service.py", "systemd/qyl-discord-sync.timer", "{build}/qyl-discord-sync.timer", "--home", "/tmp/human-tools-home", "--current", "/tmp/human-tools-current"]},
+          {"name": "systemd-units", "run": ["systemd-analyze", "verify", "{build}/qyl-discord-sync.service", "{build}/qyl-discord-sync.timer"]}
+        ],
+        "build": [
+          {"name": "stage-cli", "run": ["/usr/bin/install", "-m", "755", "src/qyl_discord_sync.py", "{build}/qyl-discord-sync"]}
+        ],
+        "test": [
+          {"name": "unit", "run": ["python3", "-m", "unittest", "discover", "-s", "tests"], "env": {"PYTHONPATH": "src"}}
+        ],
+        "smoke": [
+          {"name": "packaged-self-test", "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/qyl-discord-sync", "--", "self-test"]}
+        ]
+      }
+    }
+  },
+  "package": {
+    "files": [
+      {"source": "{build}/qyl-discord-sync", "destination": "bin/qyl-discord-sync"},
+      {"source": "config/sources.example.json", "destination": "config/sources.example.json"},
+      {"source": "launchd/com.ancplua.qyl-discord-sync.plist", "destination": "services/macos/com.ancplua.qyl-discord-sync.plist"},
+      {"source": "systemd/qyl-discord-sync.service", "destination": "services/linux/qyl-discord-sync.service"},
+      {"source": "systemd/qyl-discord-sync.timer", "destination": "services/linux/qyl-discord-sync.timer"}
+    ]
+  },
+  "install": {
+    "links": [
+      {"payload": "bin/qyl-discord-sync", "target": "~/.local/bin/qyl-discord-sync"}
+    ],
+    "services": {
+      "macos": [
+        {
+          "template": "services/macos/com.ancplua.qyl-discord-sync.plist",
+          "target": "~/Library/LaunchAgents/com.ancplua.qyl-discord-sync.plist",
+          "id": "com.ancplua.qyl-discord-sync",
+          "activate": true
+        }
+      ],
+      "linux": [
+        {
+          "template": "services/linux/qyl-discord-sync.service",
+          "target": "~/.config/systemd/user/qyl-discord-sync.service",
+          "id": "qyl-discord-sync.service",
+          "activate": false
+        },
+        {
+          "template": "services/linux/qyl-discord-sync.timer",
+          "target": "~/.config/systemd/user/qyl-discord-sync.timer",
+          "id": "qyl-discord-sync.timer",
+          "activate": true
+        }
+      ]
+    },
+    "health": {
+      "macos": [
+        {"name": "self-test", "run": ["{current}/bin/qyl-discord-sync", "self-test"]}
+      ],
+      "linux": [
+        {"name": "self-test", "run": ["{current}/bin/qyl-discord-sync", "self-test"]}
+      ]
+    }
+  }
+}

@@ -46,8 +46,8 @@
           {"name": "status-syntax", "run": ["node", "--check", "src/status.mjs"]},
           {"name": "analysis-syntax", "run": ["node", "--check", "src/analysis.mjs"]},
           {"name": "render-service", "run": ["python3", "{root}/pipeline/service.py", "systemd/opusbreak.service", "{build}/opusbreak.service", "--home", "/tmp/human-tools-home", "--current", "/tmp/human-tools-current"]},
-          {"name": "systemd-service", "run": ["systemd-analyze", "verify", "{build}/opusbreak.service"]},
-          {"name": "systemd-timer", "run": ["systemd-analyze", "verify", "systemd/opusbreak.timer"]}
+          {"name": "render-timer", "run": ["python3", "{root}/pipeline/service.py", "systemd/opusbreak.timer", "{build}/opusbreak.timer", "--home", "/tmp/human-tools-home", "--current", "/tmp/human-tools-current"]},
+          {"name": "systemd-units", "run": ["systemd-analyze", "verify", "{build}/opusbreak.service", "{build}/opusbreak.timer"]}
         ],
         "build": [
           {"name": "build-directories", "run": ["/bin/mkdir", "-p", "{build}/bin", "{build}/src"]},

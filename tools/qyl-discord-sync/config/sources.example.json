@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "key": "upstream-docs",
+      "channel_id": "replace-with-discord-channel-id",
+      "repo": "open-telemetry/semantic-conventions",
+      "branch": "main",
+      "path": "docs",
+      "filename": "semantic-conventions.yaml"
+    }
+  ]
+}

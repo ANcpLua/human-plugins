@@ -85,8 +85,7 @@ jobs:
           TAG: ${{ steps.release.outputs.tag }}
           COMMIT: ${{ github.sha }}
         run: |
-          existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq .object.sha 2>/dev/null || true)"
-          if [[ -n "$existing" ]]; then
+          if existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq .object.sha 2>/dev/null)"; then
             [[ "$existing" == "$COMMIT" ]] || {
               echo "tag $TAG points to $existing, expected $COMMIT" >&2
               exit 1

@@ -10,6 +10,7 @@ TOOL_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 PLATFORMS = {"linux", "macos"}
 STAGES = ("check", "build", "test", "smoke")
 KINDS = {"app", "automation", "cli", "daemon", "sandbox"}
+LINK_TARGET_PREFIXES = ("~/.local/bin/", "~/Applications/", "~/.hammerspoon/")
 
 
 class ManifestError(ValueError):
@@ -259,10 +260,10 @@ def validate_manifest(path: Path, data: object) -> list[str]:
                     errors.append(f"{field}.payload is not produced by package.files")
                 target = link.get("target")
                 if not isinstance(target, str) or not target.startswith(
-                    ("~/.local/bin/", "~/Applications/")
+                    LINK_TARGET_PREFIXES
                 ):
                     errors.append(
-                        f"{field}.target must live under ~/.local/bin or ~/Applications"
+                        f"{field}.target is outside the supported install directories"
                     )
                 elif target in targets:
                     errors.append(f"{field}.target is duplicated")

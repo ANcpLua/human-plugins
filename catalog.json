@@ -35,6 +35,27 @@
       "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/disk-guard"
     },
     {
+      "id": "forgejo-local-ci",
+      "displayName": "Forgejo Local CI",
+      "summary": "Runs an isolated local Forgejo and containerized Actions runner without exposing a public self-hosted runner.",
+      "kind": "sandbox",
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/forgejo-local-ci"
+    },
+    {
+      "id": "hammerspoon-claude-launcher",
+      "displayName": "Hammerspoon Claude Launcher",
+      "summary": "Launches an agent in Ghostty from Ctrl-middle-click and tiles only the terminal windows it created.",
+      "kind": "automation",
+      "platforms": [
+        "macos"
+      ],
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/hammerspoon-claude-launcher"
+    },
+    {
       "id": "heizoel-monitor",
       "displayName": "Heizöl Monitor",
       "summary": "Finds matching heating-oil listings without periodic request fingerprints and notifies through ntfy.",
@@ -68,6 +89,17 @@
       "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/opusbreak"
     },
     {
+      "id": "qyl-discord-sync",
+      "displayName": "qyl Discord Sync",
+      "summary": "Mirrors versioned upstream documentation into Discord channels with the channel itself as durable sync state.",
+      "kind": "automation",
+      "platforms": [
+        "macos",
+        "linux"
+      ],
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/qyl-discord-sync"
+    },
+    {
       "id": "repo-hygiene",
       "displayName": "Repo Hygiene",
       "summary": "Finds generated build output committed to Git without walking file contents.",
@@ -77,6 +109,16 @@
         "linux"
       ],
       "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/repo-hygiene"
+    },
+    {
+      "id": "twitch-launcher",
+      "displayName": "Twitch Launcher",
+      "summary": "Shows configured Twitch channels and opens streams directly through Streamlink.",
+      "kind": "app",
+      "platforms": [
+        "macos"
+      ],
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/twitch-launcher"
     },
     {
       "id": "vitals",
