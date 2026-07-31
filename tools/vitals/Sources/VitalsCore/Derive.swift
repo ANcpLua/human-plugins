@@ -24,7 +24,11 @@ public enum Derive {
             attributedCpuPercent: attributed,
             cores: current.cpu.cores,
             memory: memoryView(previous: previous.memory, current: current.memory),
-            disk: DiskView(free: current.disk.freeBytes, total: current.disk.totalBytes),
+            disk: DiskView(
+                free: current.disk.freeBytes,
+                available: current.disk.availableBytes,
+                total: current.disk.totalBytes
+            ),
             processes: sorted
         )
     }

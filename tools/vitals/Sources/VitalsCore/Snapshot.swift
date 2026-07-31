@@ -74,10 +74,12 @@ public struct MemoryView: Sendable, Equatable, Codable {
 
 public struct DiskView: Sendable, Equatable, Codable {
     public let free: UInt64
+    public let available: UInt64
     public let total: UInt64
 
-    public init(free: UInt64, total: UInt64) {
+    public init(free: UInt64, available: UInt64, total: UInt64) {
         self.free = free
+        self.available = available
         self.total = total
     }
 }

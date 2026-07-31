@@ -4,6 +4,17 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 
 ## Unreleased
 
+### Fixed
+- Disk headroom now follows macOS's capacity available for important usage,
+  matching Finder for user-facing display, severity, and low-disk alarms.
+- Disk values now use decimal GB labels instead of presenting binary GiB as
+  GB, and the detail view distinguishes available capacity from free space
+  immediately on disk.
+
+### Added
+- The packaged app declares its user-visible disk-space API use in a privacy
+  manifest.
+
 ### Removed
 - The duplicate `vitals disk` filesystem walker. GNU `du` remains the
   canonical manual disk-usage scanner while Vitals retains constant-time disk

@@ -7,7 +7,7 @@ enum Notifier {
         let message: String
         switch kind {
         case .diskLow:
-            message = "disk free \(Format.gib(snapshot.disk.free)) — clean caches or offload to iCloud"
+            message = "disk available \(Format.gb(snapshot.disk.available)) — clean caches or offload to iCloud"
         case .memoryRed:
             message = "memory pressure RED — available \(Format.gib(snapshot.memory.available))"
         }

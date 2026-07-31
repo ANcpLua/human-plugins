@@ -3,7 +3,11 @@ import VitalsCore
 
 enum Format {
     static func gib(_ bytes: UInt64) -> String {
-        String(format: "%6.2f GB", Double(bytes) / 1_073_741_824.0)
+        String(format: "%6.2f GiB", Double(bytes) / 1_073_741_824.0)
+    }
+
+    static func gb(_ bytes: UInt64) -> String {
+        String(format: "%6.2f GB", Double(bytes) / 1_000_000_000.0)
     }
 
     static func clock() -> String {

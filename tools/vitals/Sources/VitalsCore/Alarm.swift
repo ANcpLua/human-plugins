@@ -1,10 +1,10 @@
 public struct Thresholds: Sendable, Equatable {
-    public let diskFreeBytes: UInt64
-    public let diskRecoverBytes: UInt64
+    public let diskAvailableBytes: UInt64
+    public let diskRecoverAvailableBytes: UInt64
 
-    public init(diskFreeBytes: UInt64, diskRecoverBytes: UInt64) {
-        self.diskFreeBytes = diskFreeBytes
-        self.diskRecoverBytes = diskRecoverBytes
+    public init(diskAvailableBytes: UInt64, diskRecoverAvailableBytes: UInt64) {
+        self.diskAvailableBytes = diskAvailableBytes
+        self.diskRecoverAvailableBytes = diskRecoverAvailableBytes
     }
 }
 
@@ -37,8 +37,8 @@ public extension Derive {
     static func evaluateAlarms(snapshot: Snapshot, thresholds: Thresholds, previous: AlarmState) -> AlarmDecision {
         let diskFiring = latch(
             firing: previous.diskFiring,
-            trip: snapshot.disk.free < thresholds.diskFreeBytes,
-            clear: snapshot.disk.free >= thresholds.diskRecoverBytes
+            trip: snapshot.disk.available < thresholds.diskAvailableBytes,
+            clear: snapshot.disk.available >= thresholds.diskRecoverAvailableBytes
         )
         let memoryFiring = latch(
             firing: previous.memoryFiring,

@@ -93,10 +93,12 @@ public struct ProcessFrame: Sendable {
 
 public struct DiskFrame: Sendable {
     public let freeBytes: UInt64
+    public let availableBytes: UInt64
     public let totalBytes: UInt64
 
-    public init(freeBytes: UInt64, totalBytes: UInt64) {
+    public init(freeBytes: UInt64, availableBytes: UInt64, totalBytes: UInt64) {
         self.freeBytes = freeBytes
+        self.availableBytes = availableBytes
         self.totalBytes = totalBytes
     }
 }

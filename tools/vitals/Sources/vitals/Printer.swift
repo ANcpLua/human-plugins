@@ -30,7 +30,7 @@ enum Printer {
         out("memory   used \(Format.gib(memory.used))   avail \(Format.gib(memory.available))   free \(Format.gib(memory.free))")
         out("         wired \(Format.gib(memory.wired))  comp \(Format.gib(memory.compressed))  app \(Format.gib(memory.app))  cache \(Format.gib(memory.cachedFiles))")
         out("         swap \(Format.gib(memory.swapUsed)) of \(Format.gib(memory.swapTotal))   swapouts/interval \(memory.swapRate)")
-        out("disk     free \(Format.gib(snapshot.disk.free))  of \(Format.gib(snapshot.disk.total))")
+        out("disk     available \(Format.gb(snapshot.disk.available))   free now \(Format.gb(snapshot.disk.free))   total \(Format.gb(snapshot.disk.total))")
         out("")
         out("    pid     cpu       mem  process")
         for process in snapshot.processes.prefix(top) {

@@ -55,8 +55,8 @@ case "watch":
     let interval = arguments.dropFirst().first.flatMap(Double.init) ?? 2.0
     let diskGB = arguments.dropFirst(2).first.flatMap(Double.init) ?? 10.0
     let thresholds = Thresholds(
-        diskFreeBytes: UInt64(diskGB * 1_073_741_824.0),
-        diskRecoverBytes: UInt64((diskGB + 2.0) * 1_073_741_824.0)
+        diskAvailableBytes: UInt64(diskGB * 1_000_000_000.0),
+        diskRecoverAvailableBytes: UInt64((diskGB + 2.0) * 1_000_000_000.0)
     )
     var state = AlarmState()
     while true {

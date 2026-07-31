@@ -28,6 +28,10 @@
             "run": ["plutil", "-lint", "Info.plist"]
           },
           {
+            "name": "privacy-manifest",
+            "run": ["plutil", "-lint", "PrivacyInfo.xcprivacy"]
+          },
+          {
             "name": "launchd-plist",
             "run": ["plutil", "-lint", "launchd/dev.ancplua.vitals.plist"]
           }

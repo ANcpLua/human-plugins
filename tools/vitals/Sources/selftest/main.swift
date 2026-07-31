@@ -21,9 +21,19 @@ print("ok    capture A: \(first.processes.count) processes, \(fetchesAfterA) nam
 print("ok    capture B: \(second.processes.count) processes, \(refetched) name fetches")
 
 guard second.processes.count > 100 else { fail("implausibly few processes sampled") }
+guard second.disk.freeBytes <= second.disk.totalBytes else {
+    fail("immediate disk capacity exceeds total capacity")
+}
+guard second.disk.availableBytes <= second.disk.totalBytes else {
+    fail("important-usage disk capacity exceeds total capacity")
+}
 guard refetched < second.processes.count / 10 else {
     fail("capture B re-read \(refetched) names — memoization not effective")
 }
+print(
+    "ok    disk: \(second.disk.availableBytes) bytes available for important usage, "
+        + "\(second.disk.freeBytes) bytes free now"
+)
 
 // Object identity: only observable for heap-backed strings; names within
 // Swift's 15-byte small-string limit live inline and never allocate.
@@ -80,4 +90,43 @@ guard smoother.smooth([process(120, name: "replacement")])[0].cpuPercent == 120 
     fail("smoother mixed different process identities")
 }
 print("ok    process CPU smoothing dampens bursts without capping multicore usage")
+
+let gib: UInt64 = 1_073_741_824
+let alarmSnapshot = Snapshot(
+    cpuPercent: 0,
+    attributedCpuPercent: 0,
+    cores: 1,
+    memory: MemoryView(
+        total: gib,
+        wired: 0,
+        compressed: 0,
+        app: 0,
+        cachedFiles: 0,
+        free: gib,
+        available: gib,
+        used: 0,
+        swapRate: 0,
+        swapUsed: 0,
+        swapTotal: 0,
+        pressure: .green
+    ),
+    disk: DiskView(
+        free: 5_000_000_000,
+        available: 20_000_000_000,
+        total: 100_000_000_000
+    ),
+    processes: []
+)
+let diskDecision = Derive.evaluateAlarms(
+    snapshot: alarmSnapshot,
+    thresholds: Thresholds(
+        diskAvailableBytes: 10_000_000_000,
+        diskRecoverAvailableBytes: 12_000_000_000
+    ),
+    previous: AlarmState()
+)
+guard !diskDecision.state.diskFiring else {
+    fail("disk alarm used immediately free space instead of important-usage capacity")
+}
+print("ok    disk alarm follows important-usage capacity")
 print("PASS  memoization verified: nothing re-read")

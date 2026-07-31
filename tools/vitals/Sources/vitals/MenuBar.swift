@@ -22,8 +22,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private var groupRows: [(pid: Int32, name: String, item: NSMenuItem)] = []
     private var memberRows: [(pid: Int32, name: String, item: NSMenuItem)] = []
     private let thresholds = Thresholds(
-        diskFreeBytes: 10 * 1_073_741_824,
-        diskRecoverBytes: 12 * 1_073_741_824
+        diskAvailableBytes: 10_000_000_000,
+        diskRecoverAvailableBytes: 12_000_000_000
     )
 
     func start() {
@@ -266,18 +266,19 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private func updateTitle(_ snapshot: Snapshot) {
         let cpuFraction = normalizedCPU(snapshot)
         let availGiB = Double(snapshot.memory.available) / 1_073_741_824.0
-        let diskFreeGiB = Double(snapshot.disk.free) / 1_073_741_824.0
+        let diskAvailableGB = Double(snapshot.disk.available) / 1_000_000_000.0
+        let diskFreeGB = Double(snapshot.disk.free) / 1_000_000_000.0
         let ramState = switch snapshot.memory.pressure {
         case .green: "RAM OK"
         case .yellow: "RAM WARN"
         case .red: "RAM CRIT"
         }
-        let diskFree = diskFreeGiB >= 10
-            ? String(format: "%.0fG", diskFreeGiB)
-            : String(format: "%.1fG", diskFreeGiB)
+        let diskAvailable = diskAvailableGB >= 10
+            ? String(format: "%.0fG", diskAvailableGB)
+            : String(format: "%.1fG", diskAvailableGB)
         let diskUsedFraction = snapshot.disk.total == 0
             ? 0
-            : 1 - Double(snapshot.disk.free) / Double(snapshot.disk.total)
+            : 1 - Double(snapshot.disk.available) / Double(snapshot.disk.total)
         let font = NSFont.monospacedDigitSystemFont(ofSize: 0, weight: .medium)
         let title = NSMutableAttributedString(
             string: String(format: " %.0f%%", cpuFraction * 100),
@@ -296,16 +297,17 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             attributes: [.foregroundColor: Palette.secondary, .font: font]
         ))
         title.append(NSAttributedString(
-            string: "SSD \(diskFree)",
+            string: "SSD \(diskAvailable)",
             attributes: [.foregroundColor: Palette.usage(diskUsedFraction), .font: font]
         ))
         statusItem.button?.attributedTitle = title
         statusItem.button?.toolTip = String(
-            format: "CPU %.0f%% · RAM pressure %@ · %.1f GB available · %.1f GB SSD free",
+            format: "CPU %.0f%% · RAM pressure %@ · %.1f GiB available · %.1f GB SSD available · %.1f GB free now",
             cpuFraction * 100,
             snapshot.memory.pressure.rawValue,
             availGiB,
-            diskFreeGiB
+            diskAvailableGB,
+            diskFreeGB
         )
     }
 
@@ -462,8 +464,8 @@ private struct UsageMenuModel {
             (snapshot.cpuPercent ?? 0) / (Double(max(snapshot.cores, 1)) * 100)
         )
         let memoryFraction = fraction(snapshot.memory.used, of: snapshot.memory.total)
-        let diskUsed = snapshot.disk.total >= snapshot.disk.free
-            ? snapshot.disk.total - snapshot.disk.free
+        let diskUsed = snapshot.disk.total >= snapshot.disk.available
+            ? snapshot.disk.total - snapshot.disk.available
             : 0
 
         pressure = snapshot.memory.pressure
@@ -485,7 +487,7 @@ private struct UsageMenuModel {
             UsageRowModel(
                 label: "Disk",
                 fraction: fraction(diskUsed, of: snapshot.disk.total),
-                detail: "\(compactBytes(snapshot.disk.free)) free · \(compactBytes(snapshot.disk.total)) total"
+                detail: "\(compactDiskBytes(snapshot.disk.available)) available · \(compactDiskBytes(snapshot.disk.free)) free now"
             )
         ]
     }
@@ -815,4 +817,8 @@ private func compactBytes(_ bytes: UInt64) -> String {
     if gib >= 10 { return String(format: "%.1fG", gib) }
     if gib >= 1 { return String(format: "%.2fG", gib) }
     return String(format: "%.0fM", Double(bytes) / 1_048_576.0)
+}
+
+private func compactDiskBytes(_ bytes: UInt64) -> String {
+    String(format: "%.1f GB", Double(bytes) / 1_000_000_000.0)
 }

@@ -1,4 +1,5 @@
 import Darwin
+import Foundation
 import os
 import VitalsCore
 
@@ -32,14 +33,22 @@ public enum Sampler {
         }
     }
 
-    static func disk(_ path: String) -> Result<DiskFrame, MetricsError> {
+    package static func disk(_ path: String) -> Result<DiskFrame, MetricsError> {
         var stats = statfs()
         guard statfs(path, &stats) == 0 else {
             return .failure(.syscall(name: "statfs(\(path))", code: errno))
         }
         let block = UInt64(stats.f_bsize)
+        let freeBytes = UInt64(stats.f_bavail) * block
+        let resourceValues = try? URL(fileURLWithPath: path, isDirectory: true)
+            .resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        let availableBytes = resourceValues?
+            .volumeAvailableCapacityForImportantUsage
+            .flatMap { $0 >= 0 ? UInt64($0) : nil }
+            ?? freeBytes
         return .success(DiskFrame(
-            freeBytes: UInt64(stats.f_bavail) * block,
+            freeBytes: freeBytes,
+            availableBytes: availableBytes,
             totalBytes: UInt64(stats.f_blocks) * block
         ))
     }
