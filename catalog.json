@@ -56,6 +56,16 @@
       "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/hammerspoon-claude-launcher"
     },
     {
+      "id": "home-guard",
+      "displayName": "Home Guard",
+      "summary": "Keeps the top level of $HOME to directories, dotfiles, and allowlisted AI instruction files; strays move to ~/REVIEW-REQUIRED.",
+      "kind": "automation",
+      "platforms": [
+        "macos"
+      ],
+      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/home-guard"
+    },
+    {
       "id": "memcheck",
       "displayName": "memcheck",
       "summary": "Reports memory, swap, and matching process RSS on macOS and Linux.",
