@@ -10,7 +10,13 @@ tests and installed health checks.
 swift run -c release selftest
 swift run -c release claude-selftest
 swift run -c release vitals snapshot
+swift run -c release vitals claude
 ```
+
+Claude usage is read from the `Claude Code-credentials` Keychain item through
+`/usr/bin/security`, which Claude Code itself uses to write it, so no Keychain
+dialog is shown. Local Claude Code sessions come from
+`~/.claude/sessions/<pid>.json` (or `$CLAUDE_CONFIG_DIR/sessions`).
 
 `tool.json` builds and signs an ad-hoc `Vitals.app`, verifies it, exercises the
 packaged binary, and tests atomic install and rollback.

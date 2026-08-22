@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 public enum ClaudeHealthLevel: Sendable, Equatable {
     case operational
@@ -53,33 +52,30 @@ public struct ClaudeUsageRow: Sendable, Equatable {
 
 public enum ClaudeUsageState: Sendable, Equatable {
     case available([ClaudeUsageRow])
-    case authorizationRequired
+    /// The Keychain refused the read (user hit Deny, or the item ACL changed).
+    /// Background polling stops until an explicit refresh so the dialog never
+    /// reappears on its own.
+    case accessDenied
     case unavailable(String)
 
     public var rows: [ClaudeUsageRow] {
         switch self {
         case let .available(rows): rows
-        case .authorizationRequired, .unavailable: []
+        case .accessDenied, .unavailable: []
         }
     }
 
     public var unavailableMessage: String? {
         switch self {
         case .available: nil
-        case .authorizationRequired: "Enable Claude usage in Keychain"
+        case .accessDenied: "Keychain access denied · Refresh to retry"
         case let .unavailable(message): message
         }
     }
 
-    public var requiresAuthorization: Bool {
-        self == .authorizationRequired
+    public var isAccessDenied: Bool {
+        self == .accessDenied
     }
-}
-
-public enum ClaudeCredentialAccess: Sendable, Equatable {
-    case disabled
-    case nonInteractive
-    case interactive
 }
 
 public struct ClaudeTelemetrySnapshot: Sendable, Equatable {
@@ -190,12 +186,10 @@ public actor ClaudeTelemetryClient {
     }
 
     public func fetch(
-        credentialAccess: ClaudeCredentialAccess = .disabled
+        includeUsage: Bool = true
     ) async -> ClaudeTelemetrySnapshot {
         async let healthResult = fetchHealth()
-        async let usageResult = fetchUsage(
-            credentialAccess: credentialAccess
-        )
+        async let usageResult = fetchUsage(includeUsage: includeUsage)
         let (health, usage) = await (healthResult, usageResult)
         return ClaudeTelemetrySnapshot(
             health: health,
@@ -207,7 +201,7 @@ public actor ClaudeTelemetryClient {
     private func fetchHealth() async -> ClaudeHealth {
         do {
             var request = URLRequest(url: Self.statusURL)
-            request.setValue("Vitals/0.4.0", forHTTPHeaderField: "User-Agent")
+            request.setValue("Vitals/0.5.0", forHTTPHeaderField: "User-Agent")
             let data = try await responseData(for: request)
             return try ClaudeStatusParser.parse(data)
         } catch {
@@ -219,17 +213,13 @@ public actor ClaudeTelemetryClient {
         }
     }
 
-    private func fetchUsage(
-        credentialAccess: ClaudeCredentialAccess
-    ) async -> ClaudeUsageState {
-        guard credentialAccess != .disabled else {
-            return .authorizationRequired
+    private func fetchUsage(includeUsage: Bool) async -> ClaudeUsageState {
+        guard includeUsage else {
+            return .accessDenied
         }
 
         do {
-            let credential = try ClaudeCredentialStore.load(
-                allowAuthenticationUI: credentialAccess == .interactive
-            )
+            let credential = try await ClaudeCredentialStore.load()
             let expiry = Date(
                 timeIntervalSince1970: Double(credential.expiresAt) / 1_000
             )
@@ -250,7 +240,7 @@ public actor ClaudeTelemetryClient {
                 "application/json",
                 forHTTPHeaderField: "Content-Type"
             )
-            request.setValue("Vitals/0.4.0", forHTTPHeaderField: "User-Agent")
+            request.setValue("Vitals/0.5.0", forHTTPHeaderField: "User-Agent")
 
             let data = try await responseData(for: request)
             let rows = try ClaudeUsageParser.parse(data, now: Date())
@@ -258,8 +248,8 @@ public actor ClaudeTelemetryClient {
                 return .unavailable("No Claude usage limits")
             }
             return .available(rows)
-        } catch ClaudeTelemetryError.authorizationRequired {
-            return .authorizationRequired
+        } catch ClaudeTelemetryError.accessDenied {
+            return .accessDenied
         } catch let error as ClaudeTelemetryError {
             return .unavailable(error.userMessage)
         } catch {
@@ -393,48 +383,88 @@ public enum ClaudeUsageParser {
     }
 }
 
-private enum ClaudeCredentialStore {
-    private static let service = "Claude Code-credentials"
+/// Reads the Claude Code OAuth credential through `/usr/bin/security`, the
+/// same binary Claude Code uses to write it (`add-generic-password -U`).
+///
+/// Keychain ACLs are bound to the *creating* application, so `security` is
+/// always allowed to read the item without a dialog. Reading it from Vitals'
+/// own process via `SecItemCopyMatching` does not work reliably: the app is
+/// ad-hoc signed, so "Always Allow" binds to one exact binary (every rebuild
+/// is a new identity), and Claude Code recreates the item on sign-in/out,
+/// which drops the grant again. Going through `security` removes both
+/// failure modes and the prompt with them.
+public enum ClaudeCredentialStore {
+    public static let service = "Claude Code-credentials"
 
     static func load(
-        allowAuthenticationUI: Bool
-    ) throws -> OAuthCredential {
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: NSUserName(),
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        if !allowAuthenticationUI {
-            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUISkip
+        account: String = NSUserName(),
+        securityPath: String = "/usr/bin/security"
+    ) async throws -> OAuthCredential {
+        let output = try await run(
+            securityPath,
+            ["find-generic-password", "-s", service, "-a", account, "-w"]
+        )
+        switch output.status {
+        case 0:
+            break
+        case 44: // errSecItemNotFound
+            throw ClaudeTelemetryError.itemNotFound
+        case 36, 51, 128: // errSecInteractionNotAllowed, errSecAuthFailed, errSecUserCanceled (OSStatus low byte)
+            throw ClaudeTelemetryError.accessDenied
+        default:
+            throw ClaudeTelemetryError.keychain(output.status)
         }
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecInteractionNotAllowed
-            || status == errSecAuthFailed
-            || status == errSecUserCanceled
-            || (!allowAuthenticationUI && status == errSecItemNotFound) {
-            throw ClaudeTelemetryError.authorizationRequired
-        }
-        guard status == errSecSuccess else {
-            throw ClaudeTelemetryError.keychain(status)
-        }
-        guard let data = item as? Data else {
-            throw ClaudeTelemetryError.invalidCredential
-        }
-        let envelope = try JSONDecoder().decode(CredentialEnvelope.self, from: data)
+        return try decode(output.stdout)
+    }
+
+    public static func decode(_ data: Data) throws -> OAuthCredential {
+        // `-w` prints the secret followed by a newline.
+        let trimmed = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let envelope = try JSONDecoder().decode(
+            CredentialEnvelope.self,
+            from: Data(trimmed.utf8)
+        )
         guard let credential = envelope.claudeAiOauth,
               !credential.accessToken.isEmpty else {
             throw ClaudeTelemetryError.invalidCredential
         }
         return credential
     }
+
+    private struct Output {
+        let status: Int32
+        let stdout: Data
+    }
+
+    private static func run(_ path: String, _ arguments: [String]) async throws -> Output {
+        try await withCheckedThrowingContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: path)
+            process.arguments = arguments
+            let stdout = Pipe()
+            process.standardOutput = stdout
+            process.standardError = FileHandle.nullDevice
+            process.terminationHandler = { process in
+                let data = stdout.fileHandleForReading.readDataToEndOfFile()
+                continuation.resume(returning: Output(
+                    status: process.terminationStatus,
+                    stdout: data
+                ))
+            }
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: ClaudeTelemetryError.keychain(-1))
+            }
+        }
+    }
 }
 
-private struct OAuthCredential: Decodable {
-    let accessToken: String
-    let expiresAt: Int64
+public struct OAuthCredential: Decodable, Sendable {
+    public let accessToken: String
+    /// Milliseconds since the Unix epoch, as written by Claude Code.
+    public let expiresAt: Int64
 }
 
 private struct CredentialEnvelope: Decodable {
@@ -475,18 +505,19 @@ private struct UsagePayload: Decodable {
     let limits: [Limit]
 }
 
-private enum ClaudeTelemetryError: Error {
-    case authorizationRequired
-    case keychain(OSStatus)
+public enum ClaudeTelemetryError: Error, Equatable {
+    case accessDenied
+    case itemNotFound
+    case keychain(Int32)
     case invalidCredential
     case invalidResponse
     case httpStatus(Int)
 
     var userMessage: String {
         switch self {
-        case .authorizationRequired:
-            "Enable Claude usage in Keychain"
-        case let .keychain(status) where status == errSecItemNotFound:
+        case .accessDenied:
+            "Keychain access denied · Refresh to retry"
+        case .itemNotFound:
             "Sign in with Claude Code"
         case .keychain:
             "Claude Keychain access unavailable"

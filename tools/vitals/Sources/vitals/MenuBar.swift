@@ -8,17 +8,22 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
     private let claudeTelemetry = ClaudeTelemetryClient()
-    private let claudeKeychainAuthorization = ClaudeKeychainAuthorization()
+    private let claudeHome = ClaudeHome()
     private var alarmState = AlarmState()
     private var claudeAlertState = ClaudeAlertState()
     private var processCPUSmoother = ProcessCPUSmoother()
     private var previous: Frame?
     private var lastSnapshot: Snapshot?
     private var claudeSnapshot: ClaudeTelemetrySnapshot?
+    private var claudeSessions = ClaudeSessionsSnapshot.empty
     private var menuIsOpen = false
     private var claudeRefreshInFlight = false
+    /// Set after the Keychain refused a read; background polling stays off
+    /// until the user hits Refresh so the system dialog never loops.
+    private var claudeUsageSuspended = false
     private var dashboardView: VitalsDashboardView?
     private var claudeView: ClaudeSectionView?
+    private var refreshHintView: HintActionView?
     private var groupRows: [(pid: Int32, name: String, item: NSMenuItem)] = []
     private var memberRows: [(pid: Int32, name: String, item: NSMenuItem)] = []
     private let thresholds = Thresholds(
@@ -64,6 +69,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         menuIsOpen = true
+        claudeSessions = ClaudeSessionStore.load(home: claudeHome)
         if let snapshot = lastSnapshot {
             render(snapshot)
         }
@@ -76,6 +82,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             self.menu.removeAllItems()
             self.dashboardView = nil
             self.claudeView = nil
+            self.refreshHintView = nil
             self.groupRows = []
             self.memberRows = []
             self.menu.addItem(self.quitItem())
@@ -120,6 +127,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             lastSnapshot = displaySnapshot
             updateTitle(displaySnapshot)
             if menuIsOpen {
+                claudeSessions = ClaudeSessionStore.load(home: claudeHome)
                 updateLive(displaySnapshot)
             }
             let decision = Derive.evaluateAlarms(snapshot: snapshot, thresholds: thresholds, previous: alarmState)
@@ -132,6 +140,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             menu.removeAllItems()
             dashboardView = nil
             claudeView = nil
+            refreshHintView = nil
             groupRows = []
             memberRows = []
             menu.addItem(label(Printer.describe(error), color: Palette.coral))
@@ -144,6 +153,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         dashboardView = nil
         claudeView = nil
+        refreshHintView = nil
         groupRows = []
         memberRows = []
 
@@ -155,20 +165,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.addItem(viewItem(dashboard))
         menu.addItem(.separator())
 
-        if let claudeSnapshot {
-            let view = ClaudeSectionView(snapshot: claudeSnapshot)
+        if let model = claudeSectionModel() {
+            let view = ClaudeSectionView(model: model)
             claudeView = view
             menu.addItem(viewItem(view))
-            if claudeSnapshot.usage.requiresAuthorization {
-                menu.addItem(viewItem(HintActionView(
-                    title: "Enable Claude usage",
-                    hint: "Keychain",
-                    action: { [weak self] in
-                        self?.refreshClaude(requestKeychainAuthorization: true)
-                        self?.menu.cancelTracking()
-                    }
-                )))
-            }
             menu.addItem(.separator())
         }
 
@@ -179,21 +179,49 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
-        menu.addItem(viewItem(HintActionView(
-            title: "Refresh",
-            hint: "Updated just now",
+        let hint = HintActionView(
+            title: "Refresh Claude",
+            hint: refreshHintText(),
             action: { [weak self] in
-                self?.refresh()
-                self?.refreshClaude()
-                self?.menu.cancelTracking()
+                guard let self else { return }
+                self.claudeUsageSuspended = false
+                self.refreshHintView?.setHint("Refreshing…")
+                self.refresh()
+                self.refreshClaude()
             }
-        )))
+        )
+        refreshHintView = hint
+        menu.addItem(viewItem(hint))
         menu.addItem(.separator())
         menu.addItem(quitItem())
     }
 
+    private func claudeSectionModel() -> ClaudeSectionModel? {
+        guard let claudeSnapshot else { return nil }
+        return ClaudeSectionModel(
+            telemetry: claudeSnapshot,
+            sessions: claudeSessions,
+            now: Date()
+        )
+    }
+
+    /// System metrics are live every 2s; the hint tracks the slow path — the
+    /// last Claude status/usage fetch — which is what "Refresh" actually redoes.
+    private func refreshHintText() -> String {
+        if claudeRefreshInFlight { return "Refreshing…" }
+        guard let claudeSnapshot else { return "Not fetched yet" }
+        let age = Format.age(since: claudeSnapshot.capturedAt)
+        return age == "just now" ? "Updated just now" : "Updated \(age) ago"
+    }
+
     private func updateLive(_ snapshot: Snapshot) {
         dashboardView?.update(snapshot)
+        refreshHintView?.setHint(refreshHintText())
+        if let claudeView, let model = claudeSectionModel(),
+           !claudeView.update(model), let lastSnapshot {
+            render(lastSnapshot)
+            return
+        }
         let groups = Dictionary(
             Derive.groups(snapshot.processes).map { ($0.root.pid, $0) },
             uniquingKeysWith: { first, _ in first }
@@ -218,31 +246,15 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
     }
 
-    private func refreshClaude(
-        requestKeychainAuthorization: Bool = false
-    ) {
+    private func refreshClaude() {
         guard !claudeRefreshInFlight else { return }
         claudeRefreshInFlight = true
-        let credentialAccess: ClaudeCredentialAccess
-        if requestKeychainAuthorization {
-            credentialAccess = .interactive
-        } else if claudeKeychainAuthorization.permitsBackgroundAccess {
-            credentialAccess = .nonInteractive
-        } else {
-            credentialAccess = .disabled
-        }
-
+        let includeUsage = !claudeUsageSuspended
         Task { [weak self] in
             guard let self else { return }
-            let snapshot = await self.claudeTelemetry.fetch(
-                credentialAccess: credentialAccess
-            )
-            if requestKeychainAuthorization,
-               case .available = snapshot.usage {
-                self.claudeKeychainAuthorization.grant()
-            } else if credentialAccess == .nonInteractive,
-                      snapshot.usage.requiresAuthorization {
-                self.claudeKeychainAuthorization.revoke()
+            let snapshot = await self.claudeTelemetry.fetch(includeUsage: includeUsage)
+            if snapshot.usage.isAccessDenied {
+                self.claudeUsageSuspended = true
             }
             self.claudeRefreshInFlight = false
             self.applyClaude(snapshot)
@@ -256,11 +268,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         for alert in decision.triggered {
             Notifier.deliver(alert)
         }
-        if let claudeView {
-            claudeView.update(snapshot)
-        } else if menuIsOpen, let lastSnapshot {
-            render(lastSnapshot)
+        guard menuIsOpen, let lastSnapshot else { return }
+        refreshHintView?.setHint(refreshHintText())
+        if let claudeView, let model = claudeSectionModel(), claudeView.update(model) {
+            return
         }
+        render(lastSnapshot)
     }
 
     private func updateTitle(_ snapshot: Snapshot) {
@@ -699,10 +712,21 @@ private final class HintActionView: NSView {
         return nil
     }
 
+    func setHint(_ text: String) {
+        hintLabel.stringValue = text
+        needsLayout = true
+    }
+
     override func layout() {
         super.layout()
+        let hintWidth = min(
+            max(ceil((hintLabel.stringValue as NSString).size(
+                withAttributes: [.font: hintLabel.font as Any]
+            ).width) + 20, 72),
+            bounds.width - 180
+        )
         titleLabel.frame = NSRect(x: 16, y: 8, width: 150, height: 18)
-        hintLabel.frame = NSRect(x: bounds.width - 120, y: 8, width: 104, height: 18)
+        hintLabel.frame = NSRect(x: bounds.width - 16 - hintWidth, y: 8, width: hintWidth, height: 18)
     }
 
     override func updateTrackingAreas() {

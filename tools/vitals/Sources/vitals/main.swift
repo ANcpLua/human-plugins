@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import VitalsClaude
 import VitalsCore
 import VitalsKernel
 
@@ -78,6 +79,29 @@ case "watch":
         }
     }
 
+case "claude":
+    // Headless view of the menu's Claude section: status, usage, local sessions.
+    // Exercises the Keychain path exactly as the menu bar does, so a prompt
+    // here means the menu bar would prompt too.
+    let semaphore = DispatchSemaphore(value: 0)
+    Task.detached {
+        let telemetry = await ClaudeTelemetryClient().fetch()
+        Printer.out("status    \(telemetry.health.label)  \(telemetry.health.detail)")
+        if let message = telemetry.usage.unavailableMessage {
+            Printer.out("usage     \(message)")
+        }
+        for row in telemetry.usage.rows {
+            Printer.out("usage     \(row.label.padding(toLength: 22, withPad: " ", startingAt: 0))\(row.detail)")
+        }
+        let sessions = ClaudeSessionStore.load()
+        Printer.out("sessions  \(sessions.sessions.count) local · \(sessions.busyCount) busy  (\(ClaudeHome().sessionsDirectory.path))")
+        for session in sessions.sessions {
+            Printer.out("  \(session.status.rawValue.padding(toLength: 5, withPad: " ", startingAt: 0)) \(session.name.padding(toLength: 20, withPad: " ", startingAt: 0)) \(Format.age(since: session.startedAt).padding(toLength: 9, withPad: " ", startingAt: 0)) \(session.abbreviatedCwd())")
+        }
+        semaphore.signal()
+    }
+    semaphore.wait()
+
 case "bar":
     let application = NSApplication.shared
     application.setActivationPolicy(.accessory)
@@ -86,6 +110,6 @@ case "bar":
     application.run()
 
 default:
-    Printer.err("usage: vitals [snapshot | json | predict <pid> | watch [s] [diskGB] | bar]")
+    Printer.err("usage: vitals [snapshot | json | predict <pid> | watch [s] [diskGB] | claude | bar]")
     exit(2)
 }

@@ -197,47 +197,97 @@ do {
         recoveredHealth.triggered.isEmpty,
         "health recovery emitted an unwanted alert"
     )
-    let authorizationRequired = ClaudeUsageState.authorizationRequired
+    let denied = ClaudeUsageState.accessDenied
     expect(
-        authorizationRequired.requiresAuthorization
-            && authorizationRequired.rows.isEmpty
-            && authorizationRequired.unavailableMessage
-                == "Enable Claude usage in Keychain",
-        "Keychain authorization state is not explicit"
+        denied.isAccessDenied
+            && denied.rows.isEmpty
+            && denied.unavailableMessage == "Keychain access denied · Refresh to retry",
+        "Keychain denial state is not explicit"
     )
 
-    let defaultsName = "vitals-claude-selftest-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: defaultsName)!
-    defer {
-        defaults.removePersistentDomain(forName: defaultsName)
+    // Session registry: one local interactive session, one stale pid, one
+    // cloud-shaped entry, one malformed file.
+    let sessionsRoot = FileManager.default.temporaryDirectory
+        .appendingPathComponent("vitals-claude-selftest-\(UUID().uuidString)", isDirectory: true)
+    let sessionsDir = sessionsRoot.appendingPathComponent("sessions", isDirectory: true)
+    try FileManager.default.createDirectory(at: sessionsDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: sessionsRoot) }
+    let nowMillis: Int64 = 1_787_386_600_000
+    let registryNow = Date(timeIntervalSince1970: Double(nowMillis) / 1_000)
+    func write(_ name: String, _ json: String) throws {
+        try Data(json.utf8).write(to: sessionsDir.appendingPathComponent(name))
     }
-    let executable = FileManager.default.temporaryDirectory
-        .appendingPathComponent(defaultsName)
-    defer {
-        try? FileManager.default.removeItem(at: executable)
+    try write("2663.json", """
+        {"pid":2663,"sessionId":"b30104f9","cwd":"/Users/ancplua/repo-playground/customer-desk",
+         "startedAt":\(nowMillis - 420_000),"kind":"interactive","entrypoint":"cli",
+         "name":"customer-desk-82","status":"busy","updatedAt":\(nowMillis - 1_000),"version":"2.1.239"}
+        """)
+    try write("1274.json", """
+        {"pid":1274,"sessionId":"f2b61b80","cwd":"/Users/ancplua",
+         "startedAt":\(nowMillis - 3_900_000),"kind":"interactive",
+         "name":"ancplua-bd","status":"idle","updatedAt":\(nowMillis - 60_000)}
+        """)
+    try write("9999.json", """
+        {"pid":9999,"sessionId":"dead","cwd":"/tmp","startedAt":\(nowMillis),"name":"dead-00","status":"idle"}
+        """)
+    try write("4242.json", """
+        {"pid":4242,"sessionId":"cloud","cwd":"/","startedAt":\(nowMillis),"kind":"cloud","name":"Opus comparison","status":"idle"}
+        """)
+    try write("1.json", "not json")
+    try write("notes.json", """
+        {"pid":1,"sessionId":"x","cwd":"/","startedAt":\(nowMillis)}
+        """)
+    let registry = ClaudeSessionStore.load(
+        home: ClaudeHome(root: sessionsRoot),
+        now: registryNow,
+        isAlive: { $0 != 9999 }
+    )
+    expect(
+        registry.sessions.map { $0.name } == ["customer-desk-82", "ancplua-bd"],
+        "session registry did not filter dead, cloud, malformed entries or sort busy-first: \(registry.sessions.map { $0.name })"
+    )
+    expect(registry.busyCount == 1, "busy session count is wrong")
+    expect(
+        registry.sessions.first?.abbreviatedCwd(homeDirectory: "/Users/ancplua")
+            == "~/repo-playground/customer-desk"
+            && registry.sessions.last?.abbreviatedCwd(homeDirectory: "/Users/ancplua") == "~",
+        "cwd abbreviation is wrong"
+    )
+    expect(
+        registry.sessions.first.map { registryNow.timeIntervalSince($0.startedAt) } == 420,
+        "startedAt was not decoded from milliseconds"
+    )
+    let emptyRegistry = ClaudeSessionStore.load(
+        home: ClaudeHome(root: sessionsRoot.appendingPathComponent("missing")),
+        now: registryNow
+    )
+    expect(emptyRegistry.sessions.isEmpty, "missing sessions directory did not yield an empty snapshot")
+
+    let credential = try ClaudeCredentialStore.decode(Data(
+        """
+        {"claudeAiOauth":{"accessToken":"sk-ant-test","expiresAt":1787400000000,"scopes":["user:inference"]}}
+
+        """.utf8
+    ))
+    expect(
+        credential.accessToken == "sk-ant-test" && credential.expiresAt == 1_787_400_000_000,
+        "security -w output was not decoded"
+    )
+    do {
+        _ = try ClaudeCredentialStore.decode(Data(#"{"claudeAiOauth":{"accessToken":"","expiresAt":1}}"#.utf8))
+        failures.append("empty access token was accepted")
+    } catch ClaudeTelemetryError.invalidCredential {
     }
-    try Data("first build".utf8).write(to: executable)
-    let firstBuild = ClaudeKeychainAuthorization(
-        defaults: defaults,
-        executableURL: executable
-    )
+
+    let home = ClaudeHome(environment: ["CLAUDE_CONFIG_DIR": "/tmp/claude-alt"])
     expect(
-        !firstBuild.permitsBackgroundAccess,
-        "unknown binary inherited Keychain authorization"
+        home.sessionsDirectory.path == "/tmp/claude-alt/sessions",
+        "CLAUDE_CONFIG_DIR override was not honored"
     )
-    firstBuild.grant()
+    let defaultHome = ClaudeHome(environment: [:], homeDirectory: URL(fileURLWithPath: "/Users/x"))
     expect(
-        firstBuild.permitsBackgroundAccess,
-        "authorized binary fingerprint was not persisted"
-    )
-    try Data("second build".utf8).write(to: executable)
-    let secondBuild = ClaudeKeychainAuthorization(
-        defaults: defaults,
-        executableURL: executable
-    )
-    expect(
-        !secondBuild.permitsBackgroundAccess,
-        "changed binary inherited stale Keychain authorization"
+        defaultHome.root.path == "/Users/x/.claude",
+        "default Claude home is not ~/.claude"
     )
 } catch {
     failures.append("selftest threw: \(error)")

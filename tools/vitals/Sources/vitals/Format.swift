@@ -21,6 +21,16 @@ enum Format {
         return String(decoding: buffer.prefix(written), as: UTF8.self)
     }
 
+    /// "just now", "42s", "7m", "3h", "2d" — compact relative age for menu rows.
+    static func age(since date: Date, now: Date = Date()) -> String {
+        let seconds = max(0, now.timeIntervalSince(date))
+        if seconds < 5 { return "just now" }
+        if seconds < 60 { return "\(Int(seconds))s" }
+        if seconds < 3_600 { return "\(Int(seconds / 60))m" }
+        if seconds < 86_400 { return "\(Int(seconds / 3_600))h" }
+        return "\(Int(seconds / 86_400))d"
+    }
+
     static func percent(_ value: Double?) -> String {
         guard let value else { return "    -- " }
         return String(format: "%6.1f%%", value)

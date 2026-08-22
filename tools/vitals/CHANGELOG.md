@@ -5,6 +5,25 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 ## Unreleased
 
 ### Fixed
+- Claude usage no longer triggers the macOS Keychain dialog. The credential
+  is read through `/usr/bin/security find-generic-password`, the same binary
+  Claude Code writes it with, so it is always on the item's ACL. The previous
+  in-process `SecItemCopyMatching` read depended on "Always Allow", which is
+  bound to one exact ad-hoc-signed build and is dropped whenever Claude Code
+  recreates the item. The binary-fingerprint authorization state in
+  UserDefaults is gone with it. If the Keychain does refuse a read, background
+  polling stops until the user hits Refresh instead of re-prompting.
+- The Refresh row now shows the real age of the last Claude fetch
+  ("Updated 12s ago") and updates live; clicking it refetches in place instead
+  of closing the menu.
+
+### Added
+- Local Claude Code sessions (`~/.claude/sessions/<pid>.json`) are listed in
+  the Claude section: name, working directory, busy/idle, age. Dead pids,
+  stale entries, and cloud sessions are filtered. `CLAUDE_CONFIG_DIR` is
+  honored via the new `ClaudeHome` path resolver.
+- `vitals claude` prints the Claude section headlessly (status, usage rows,
+  local sessions) for health checks and prompt-free verification.
 - Disk headroom now follows macOS's capacity available for important usage,
   matching Finder for user-facing display, severity, and low-disk alarms.
 - Disk values now use decimal GB labels instead of presenting binary GiB as
