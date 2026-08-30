@@ -7,7 +7,8 @@ enum Notifier {
         let message: String
         switch kind {
         case .diskLow:
-            message = "disk available \(Format.gb(snapshot.disk.available)) — clean caches or offload to iCloud"
+            message = "disk available \(Format.gb(snapshot.disk.available)) — disk-guard kicked"
+            kickstartDiskGuard()
         case .memoryRed:
             message = "memory pressure RED — available \(Format.gib(snapshot.memory.available))"
         }
@@ -16,6 +17,16 @@ enum Notifier {
 
     static func deliver(_ alert: ClaudeAlert) {
         deliver(message: alert.message, title: alert.title)
+    }
+
+    /// The disk alarm latches once per red episode; hand that edge to the
+    /// disk-guard LaunchAgent so cleanup starts now instead of at its next
+    /// 5-minute poll. Missing agent → launchctl exits non-zero, nothing else.
+    private static func kickstartDiskGuard() {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = ["kickstart", "gui/\(getuid())/dev.ancplua.disk-guard"]
+        try? process.run()
     }
 
     private static func deliver(message: String, title: String) {

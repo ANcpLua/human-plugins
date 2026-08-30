@@ -4,6 +4,10 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 
 ## Unreleased
 
+### Added
+- Disk alarm now `launchctl kickstart`s `dev.ancplua.disk-guard` the moment it
+  latches, so cleanup starts immediately instead of at disk-guard's next poll.
+
 ### Fixed
 - Claude usage no longer triggers the macOS Keychain dialog. The credential
   is read through `/usr/bin/security find-generic-password`, the same binary
