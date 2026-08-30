@@ -4,7 +4,7 @@ Reclaims regenerable data the moment the SSD goes red. Red is the same line
 vitals draws: fewer than **10 GB available** on `/System/Volumes/Data`
 (`DISK_GUARD_THRESHOLD_GB`). Above it every run is a silent no-op.
 
-Two triggers, one script:
+Triggers:
 
 - launchd `StartInterval` every 5 minutes, `RunAtLoad` so it is armed right
   after login/restart;
@@ -25,10 +25,9 @@ threshold: idle git-ignored `bin`/`obj`/`artifacts` under `~/RiderProjects`,
 `~/.cache/typescript`, and the NuGet global-packages folder.
 
 `~/Library/Caches/JetBrains` is never touched. The allowlist with age
-semantics is the header comment of `src/disk-guardd`; read it before changing
-anything.
+semantics is the header comment of `src/disk-guardd`.
 
-## Is it alive?
+## Status
 
 ```sh
 disk-guardd status

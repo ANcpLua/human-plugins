@@ -17,7 +17,7 @@
 #   /opt/homebrew/var/homebrew/tmp                   1d  per-file
 #   brew cleanup --prune=all, pnpm store prune, dotnet nuget http-cache
 #   docker system prune -f                               only while OrbStack is already running
-# Tier 2 - only when Rider is NOT running and tier 1 left us below threshold:
+# Tier 2 - only when Rider is not running and tier 1 left available space below threshold:
 #   ~/RiderProjects **/artifacts, git-ignored bin/obj  14d  whole-dir, newest-file probe
 #   ~/.nuget/packages via dotnet nuget locals global-packages --clear
 #   ~/.cache/typescript (tsserver typings cache; Rider's tsserver uses it)
@@ -49,7 +49,7 @@ rider_running() { pgrep -q -x rider || pgrep -q -x Rider.Backend; }
 fresh() { [[ -n "$(/usr/bin/find "$1" -mmin -"$2" 2>/dev/null)" ]]; }   # $1=file $2=minutes
 notify() { osascript -e "display notification \"$1\" with title \"disk-guard\"" 2>/dev/null; }
 
-# --- status: the one command that proves the agent is alive -------------------
+# --- status --------------------------------------------------------------------
 if [[ "${1:-}" == status ]]; then
     integer a; a=$(avail_bytes)
     print "available   $(gb $a) GB on $DATA_VOLUME  (threshold $THRESHOLD_GB GB, $( (( a < THRESHOLD_BYTES )) && print RED || print ok ))"
