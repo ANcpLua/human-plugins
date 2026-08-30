@@ -20,7 +20,7 @@ check → build → test → package → smoke → isolated deploy → health �
 |---|---|---|
 | [airpods-mic-guard](tools/airpods-mic-guard/README.md) | macOS | Keeps AirPods on hi-fi output until an app owns the microphone |
 | [cc8](tools/cc8/README.md) | macOS, Linux | Creates eight tmux workspaces for parallel coding agents |
-| [disk-guard](tools/disk-guard/README.md) | macOS | Reclaims only allowlisted derived data below a disk threshold |
+| [disk-guard](tools/disk-guard/README.md) | macOS | Reclaims regenerable caches the moment available disk drops below the 10 GB red line; Rider-sensitive paths only while Rider is closed |
 | [forgejo-local-ci](tools/forgejo-local-ci/README.md) | macOS, Linux | Runs an isolated local Forgejo and containerized Actions runner |
 | [hammerspoon-claude-launcher](tools/hammerspoon-claude-launcher/README.md) | macOS | Opens and tiles agent terminals from a mouse or keyboard trigger |
 | [memcheck](tools/memcheck/README.md) | macOS, Linux | Reports memory, swap, and matching process RSS |

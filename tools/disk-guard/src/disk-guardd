@@ -1,120 +1,164 @@
 #!/bin/zsh
-# disk-guard: threshold-triggered cleanup, allowlist-based.
-# No-ops unless free space < THRESHOLD_GB. Only touches paths on the explicit
-# age-eligible allowlist below, plus tool-native pruning (pnpm, NuGet).
+# disk-guard: reclaim regenerable data the moment the SSD goes red.
 #
-# Allowlist (age semantics per row):
+# Trigger: launchd StartInterval every 5 min (+ RunAtLoad), and an immediate
+# `launchctl kickstart` from vitals when its disk alarm latches. The metric and
+# unit are vitals' red line: bytes available on /System/Volumes/Data, decimal
+# GB, default 10 GB (DISK_GUARD_THRESHOLD_GB). A full pass runs at most once
+# per hour (DISK_GUARD_COOLDOWN_MIN). No-op runs only touch the heartbeat file.
+#
+# Tier 1 - always safe. Nothing here is mapped or held open by Rider:
 #   ~/.codex/sessions, ~/.codex/archived_sessions   14d  per-file
 #   ~/Library/Logs/**                               14d  per-file
 #   ~/.codex/.tmp                                    7d  per-file
-#   RiderProjects bin/obj/artifacts dirs            14d  whole-dir, newest-file
-#                                                        probe + git check-ignore
-#   ~/.cache/* (except codex-runtimes)              14d  whole-subdir, newest-file probe
-# Escalation: 2nd fire within 7 days and still < ESCALATE_GB
-#   -> NuGet global-packages clear (all restorable from nuget.org)
+#   $TMPDIR/.com.google.Chrome.*                   120m  per-file (leaked framework copies)
+#   ~/.cache/* except codex-runtimes, typescript    14d  whole-subdir, newest-file probe
+#   ~/.npm/_cacache                                      whole-dir (npm re-downloads)
+#   /opt/homebrew/var/homebrew/tmp                   1d  per-file
+#   brew cleanup --prune=all, pnpm store prune, dotnet nuget http-cache
+#   docker system prune -f                               only while OrbStack is already running
+# Tier 2 - only when Rider is NOT running and tier 1 left us below threshold:
+#   ~/RiderProjects **/artifacts, git-ignored bin/obj  14d  whole-dir, newest-file probe
+#   ~/.nuget/packages via dotnet nuget locals global-packages --clear
+#   ~/.cache/typescript (tsserver typings cache; Rider's tsserver uses it)
+# Never touched: ~/Library/Caches/JetBrains (Rider maps its index and caches
+# from there for the whole session).
 set -u
 
-THRESHOLD_GB=${DISK_GUARD_THRESHOLD_GB:-25}
-ESCALATE_GB=15
+DATA_VOLUME=/System/Volumes/Data
+THRESHOLD_GB=${DISK_GUARD_THRESHOLD_GB:-10}
+COOLDOWN_MIN=${DISK_GUARD_COOLDOWN_MIN:-60}
 STALE_DAYS=14
 LOG="$HOME/Library/Logs/disk-guard.log"
-STATE="$HOME/.local/state/disk-guard.last-fire"
+STATE_DIR="$HOME/.local/state/disk-guard"
+HEARTBEAT="$STATE_DIR/last-check"
+LAST_FIRE="$STATE_DIR/last-fire"
+HYGIENE="$STATE_DIR/last-hygiene"
 PROJECTS="$HOME/RiderProjects"
+LABEL=dev.ancplua.disk-guard
 
-mkdir -p "${LOG:h}" "${STATE:h}"
-free_gb() { df -g / | awk 'NR==2{print $4}'; }
+integer THRESHOLD_BYTES
+(( THRESHOLD_BYTES = THRESHOLD_GB * 1e9 ))
+
+mkdir -p "${LOG:h}" "$STATE_DIR"
+avail_bytes() { print $(( $(df -k "$DATA_VOLUME" | awk 'NR==2{print $4}') * 1024 )); }
+gb() { printf '%.1f' $(( $1 / 1e9 )); }
 stamp() { date '+%Y-%m-%d %H:%M:%S'; }
+log() { print "$(stamp) $*" >> "$LOG"; }
+rider_running() { pgrep -q -x rider || pgrep -q -x Rider.Backend; }
+fresh() { [[ -n "$(/usr/bin/find "$1" -mmin -"$2" 2>/dev/null)" ]]; }   # $1=file $2=minutes
+notify() { osascript -e "display notification \"$1\" with title \"disk-guard\"" 2>/dev/null; }
 
-# --- repo-hygiene: daily git-index check, independent of free space --------
-# Sub-second, no resident process. Notifies only on findings (exit 1);
-# exit 0 clean and exit 2 usage errors stay silent in the notification path.
+# --- status: the one command that proves the agent is alive -------------------
+if [[ "${1:-}" == status ]]; then
+    integer a; a=$(avail_bytes)
+    print "available   $(gb $a) GB on $DATA_VOLUME  (threshold $THRESHOLD_GB GB, $( (( a < THRESHOLD_BYTES )) && print RED || print ok ))"
+    print "rider       $(rider_running && print running — tier 2 gated || print closed — tier 2 allowed)"
+    print "last check  $(stat -f '%Sm' "$HEARTBEAT" 2>/dev/null || print never)"
+    print "last fire   $(stat -f '%Sm' "$LAST_FIRE" 2>/dev/null || print never)"
+    if launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
+        print "launchd     loaded, $(launchctl print "gui/$(id -u)/$LABEL" | awk '/^\truns = /{print $3}') run(s) since boot"
+    else
+        print "launchd     NOT LOADED ($LABEL)"
+    fi
+    print "log         $LOG"
+    exit 0
+fi
+
+touch "$HEARTBEAT"
+
+# --- repo-hygiene: daily git-index check, independent of free space ----------
 RH="$HOME/.local/bin/repo-hygiene"
-if [[ -x "$RH" ]]; then
+if [[ -x "$RH" && -d "$PROJECTS" ]] && ! fresh "$HYGIENE" 1440; then
+    touch "$HYGIENE"
     rc=0; "$RH" -q "$PROJECTS" 2>/dev/null || rc=$?
     if (( rc == 1 )); then
-        print "$(stamp) HYGIENE: build output committed to git:" >> "$LOG"
+        log "HYGIENE: build output committed to git:"
         "$RH" --color never "$PROJECTS" >> "$LOG" 2>/dev/null || true
         osascript -e 'display notification "Build output committed to git — details in ~/Library/Logs/disk-guard.log" with title "repo-hygiene"' 2>/dev/null
     fi
 fi
 
-before=$(free_gb)
-if (( before >= THRESHOLD_GB )); then
-    print "$(stamp) ok ${before}G free, no action" >> "$LOG"
-    exit 0
-fi
+integer before; before=$(avail_bytes)
+(( before >= THRESHOLD_BYTES )) && exit 0
+fresh "$LAST_FIRE" "$COOLDOWN_MIN" && exit 0
+touch "$LAST_FIRE"
+log "FIRE $(gb $before) GB available (< $THRESHOLD_GB GB)"
 
-print "$(stamp) FIRE ${before}G free (< ${THRESHOLD_GB}G)" >> "$LOG"
-
-# --- per-file prunes (then drop emptied subdirs) ---------------------------
+# --- helpers -------------------------------------------------------------------
 prune_files() { # $1=path $2=days
     [[ -d "$1" ]] || return 0
     local n
     n=$(/usr/bin/find "$1" -type f -mtime +"$2" -print -delete 2>/dev/null | wc -l | tr -d ' ')
     /usr/bin/find "$1" -mindepth 1 -type d -empty -delete 2>/dev/null
-    (( n > 0 )) && print "$(stamp)   pruned $n files >${2}d from $1" >> "$LOG"
+    (( n > 0 )) && log "  pruned $n files >${2}d from $1"
 }
+idle_dir() { # $1=dir $2=days -> success if no recent file
+    [[ -z "$(/usr/bin/find "$1" -type f -mtime -"$2" -print -quit 2>/dev/null)" ]]
+}
+rm_logged() { # $1=dir $2=reason
+    [[ -e "$1" ]] || return 0
+    local sz
+    sz=$(du -sk "$1" 2>/dev/null | awk '{printf "%.1f", $1/1048576}')
+    rm -rf "$1" && log "  rm ${sz}G $1 ($2)"
+}
+
+# === tier 1: always safe =======================================================
 prune_files "$HOME/.codex/sessions" "$STALE_DAYS"
 prune_files "$HOME/.codex/archived_sessions" "$STALE_DAYS"
 prune_files "$HOME/Library/Logs" "$STALE_DAYS"
 prune_files "$HOME/.codex/.tmp" 7
 
-# --- TMPDIR: leaked Chrome framework copies --------------------------------
-# Chrome writes a ~490M copy of its framework dylib to TMPDIR on each launch and
-# fails to remove it; ~17/day accumulate (51 = 9.9G observed 2026-07-28). They are
-# closed the moment they are written -- verified none held open via lsof -- and
-# Chrome recreates on demand, so anything older than 2h is pure leak.
-# minutes, not $STALE_DAYS: at 490M each a 14d window is 100G+.
-prune_tmpdir_leaks() {
-    local t="${TMPDIR:-/tmp}" n
-    [[ -d "$t" ]] || return 0
-    n=$(/usr/bin/find "$t" -maxdepth 1 -type f -name '.com.google.Chrome.*' \
-        -mmin +120 -print -delete 2>/dev/null | wc -l | tr -d ' ')
-    (( n > 0 )) && print "$(stamp)   pruned $n leaked Chrome framework copies from TMPDIR" >> "$LOG"
-}
-prune_tmpdir_leaks
-
-# --- whole-dir prunes: delete only if NOTHING inside is newer than cutoff --
-idle_dir() { # $1=dir $2=days -> success if no recent file
-    [[ -z "$(/usr/bin/find "$1" -type f -mtime -"$2" -print -quit 2>/dev/null)" ]]
-}
-rm_logged() { # $1=dir $2=reason
-    local sz
-    sz=$(du -sk "$1" 2>/dev/null | awk '{printf "%.1f", $1/1048576}')
-    rm -rf "$1" && print "$(stamp)   rm ${sz}G $1 ($2)" >> "$LOG"
-}
-
-# build output: artifacts/ needs no git guard (never legitimately tracked);
-# bin/obj MUST be git-ignored — repos routinely track a real bin/ of scripts.
-/usr/bin/find "$PROJECTS" -maxdepth 4 -type d -iname artifacts -prune 2>/dev/null | while read -r d; do
-    idle_dir "$d" "$STALE_DAYS" && rm_logged "$d" "idle artifacts"
-done
-/usr/bin/find "$PROJECTS" -type d \( -name bin -o -name obj \) -prune 2>/dev/null | while read -r d; do
-    git -C "${d:h}" check-ignore --quiet "${d:t}" 2>/dev/null || continue
-    idle_dir "$d" "$STALE_DAYS" && rm_logged "$d" "idle git-ignored bin/obj"
-done
-
-# ~/.cache subdirs, whole-subdir semantics; codex-runtimes excluded
-for d in "$HOME"/.cache/*(N/); do
-    [[ "${d:t}" == "codex-runtimes" ]] && continue
-    idle_dir "$d" "$STALE_DAYS" && rm_logged "$d" "idle cache"
-done
-
-# --- tool-native pruning ---------------------------------------------------
-pnpm store prune >/dev/null 2>&1 && print "$(stamp)   pnpm store prune done" >> "$LOG"
-dotnet nuget locals http-cache --clear >/dev/null 2>&1 && print "$(stamp)   nuget http-cache cleared" >> "$LOG"
-# brew build scratch: abandoned on every interrupted/failed build, never self-cleans
-prune_files "/opt/homebrew/var/homebrew/tmp" 1
-/usr/bin/find /opt/homebrew/var/homebrew/tmp -mindepth 1 -type d -empty -delete 2>/dev/null
-brew cleanup --prune=all >/dev/null 2>&1 && print "$(stamp)   brew cleanup done" >> "$LOG"
-
-# --- escalation: 2nd fire within 7 days and still critically low -----------
-now=$(date +%s)
-last=$(cat "$STATE" 2>/dev/null || print 0)
-print "$now" > "$STATE"
-if (( now - last < 7*86400 )) && (( $(free_gb) < ESCALATE_GB )); then
-    dotnet nuget locals global-packages --clear >/dev/null 2>&1 \
-        && print "$(stamp)   ESCALATED: nuget global-packages cleared (2nd fire in 7d)" >> "$LOG"
+# Chrome writes a ~490M copy of its framework dylib to TMPDIR per launch and
+# never removes it (51 = 9.9G observed 2026-07-28). Closed the moment they are
+# written; anything older than 2h is pure leak.
+t="${TMPDIR:-/tmp}"
+if [[ -d "$t" ]]; then
+    n=$(/usr/bin/find "$t" -maxdepth 1 -type f -name '.com.google.Chrome.*' -mmin +120 -print -delete 2>/dev/null | wc -l | tr -d ' ')
+    (( n > 0 )) && log "  pruned $n leaked Chrome framework copies from TMPDIR"
 fi
 
-print "$(stamp) done, $(free_gb)G free (was ${before}G)" >> "$LOG"
+for d in "$HOME"/.cache/*(N/); do
+    case "${d:t}" in codex-runtimes|typescript) continue ;; esac
+    idle_dir "$d" "$STALE_DAYS" && rm_logged "$d" "idle cache"
+done
+rm_logged "$HOME/.npm/_cacache" "npm cache"
+
+prune_files "/opt/homebrew/var/homebrew/tmp" 1
+/usr/bin/find /opt/homebrew/var/homebrew/tmp -mindepth 1 -type d -empty -delete 2>/dev/null
+brew cleanup --prune=all >/dev/null 2>&1 && log "  brew cleanup done"
+pnpm store prune >/dev/null 2>&1 && log "  pnpm store prune done"
+dotnet nuget locals http-cache --clear >/dev/null 2>&1 && log "  nuget http-cache cleared"
+# docker CLI would boot the OrbStack VM if it is not running; only prune a live one.
+if pgrep -q -x OrbStack; then
+    docker system prune -f >/dev/null 2>&1 && log "  docker system prune done"
+fi
+
+integer after1; after1=$(avail_bytes)
+skipped=""
+
+# === tier 2: Rider must be closed ==============================================
+if (( after1 < THRESHOLD_BYTES )); then
+    if rider_running; then
+        skipped=" (Rider open: bin/obj + NuGet skipped)"
+        log "  tier 2 skipped: Rider is running"
+    else
+        log "  tier 2: still $(gb $after1) GB, Rider closed"
+        # artifacts/ needs no git guard (never legitimately tracked);
+        # bin/obj MUST be git-ignored - repos routinely track a real bin/ of scripts.
+        /usr/bin/find "$PROJECTS" -maxdepth 4 -type d -iname artifacts -prune 2>/dev/null | while read -r d; do
+            idle_dir "$d" "$STALE_DAYS" && rm_logged "$d" "idle artifacts"
+        done
+        /usr/bin/find "$PROJECTS" -type d \( -name bin -o -name obj \) -prune 2>/dev/null | while read -r d; do
+            git -C "${d:h}" check-ignore --quiet "${d:t}" 2>/dev/null || continue
+            idle_dir "$d" "$STALE_DAYS" && rm_logged "$d" "idle git-ignored bin/obj"
+        done
+        rm_logged "$HOME/.cache/typescript" "tsserver typings cache"
+        dotnet nuget locals global-packages --clear >/dev/null 2>&1 \
+            && log "  nuget global-packages cleared (restorable from nuget.org)"
+    fi
+fi
+
+integer after; after=$(avail_bytes)
+log "done, $(gb $after) GB available (was $(gb $before) GB)"
+notify "reclaimed $(gb $(( after - before ))) GB — $(gb $before) → $(gb $after) GB available${skipped}"

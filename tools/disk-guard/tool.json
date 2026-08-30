@@ -3,11 +3,13 @@
   "schemaVersion": 1,
   "id": "disk-guard",
   "displayName": "Disk Guard",
-  "summary": "Reclaims explicitly allowlisted derived data only when disk headroom is low.",
+  "summary": "Reclaims regenerable caches the moment available disk drops below vitals' 10 GB red line; Rider-sensitive paths only while Rider is closed.",
   "status": "active",
   "kind": "automation",
   "license": "MIT",
-  "platforms": ["macos"],
+  "platforms": [
+    "macos"
+  ],
   "source": {
     "repository": "ANcpLua/human-plugins",
     "path": "tools/disk-guard",
@@ -21,29 +23,54 @@
         "check": [
           {
             "name": "syntax",
-            "run": ["zsh", "-n", "src/disk-guardd"]
+            "run": [
+              "zsh",
+              "-n",
+              "src/disk-guardd"
+            ]
           },
           {
             "name": "launchd-plist",
-            "run": ["plutil", "-lint", "launchd/dev.ancplua.disk-guard.plist"]
+            "run": [
+              "plutil",
+              "-lint",
+              "launchd/dev.ancplua.disk-guard.plist"
+            ]
           }
         ],
         "build": [
           {
             "name": "stage-executable",
-            "run": ["/usr/bin/install", "-m", "755", "src/disk-guardd", "{build}/disk-guardd"]
+            "run": [
+              "/usr/bin/install",
+              "-m",
+              "755",
+              "src/disk-guardd",
+              "{build}/disk-guardd"
+            ]
           }
         ],
         "test": [
           {
             "name": "threshold-noop",
-            "run": ["bash", "tests/threshold-noop.sh", "{build}/disk-guardd", "{build}/test-home"]
+            "run": [
+              "bash",
+              "tests/threshold-noop.sh",
+              "{build}/disk-guardd",
+              "{build}/test-home"
+            ]
           }
         ],
         "smoke": [
           {
             "name": "packaged-threshold-noop",
-            "run": ["python3", "{root}/pipeline/probe.py", "exec", "{package}", "bin/disk-guardd"],
+            "run": [
+              "python3",
+              "{root}/pipeline/probe.py",
+              "exec",
+              "{package}",
+              "bin/disk-guardd"
+            ],
             "env": {
               "DISK_GUARD_THRESHOLD_GB": "0",
               "HOME": "{build}/smoke-home"
@@ -86,7 +113,9 @@
       "macos": [
         {
           "name": "threshold-noop",
-          "run": ["{current}/bin/disk-guardd"],
+          "run": [
+            "{current}/bin/disk-guardd"
+          ],
           "env": {
             "DISK_GUARD_THRESHOLD_GB": "0",
             "HOME": "{home}"

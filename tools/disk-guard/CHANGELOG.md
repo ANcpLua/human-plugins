@@ -5,12 +5,30 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 ## Unreleased
 
 ### Changed
+- Trigger is now a 5-minute `StartInterval` with `RunAtLoad`, plus an
+  immediate `launchctl kickstart` from vitals when its disk alarm latches,
+  instead of a single daily calendar run.
+- Threshold is vitals' red line: bytes available on `/System/Volumes/Data`,
+  decimal GB, default 10 GB (was `df -g /`, 25 GiB). Full passes are limited
+  to one per hour.
+- Cleanup is split into tier 1 (always safe, never anything Rider holds open)
+  and tier 2 (idle `bin`/`obj`/`artifacts`, `~/.cache/typescript`, NuGet
+  global-packages), which runs only when Rider is not running and tier 1 left
+  the disk below threshold. The old "second fire within seven days" escalation
+  is gone.
+- No-op runs write only a heartbeat; the log holds fires only, and every fire
+  ends with a notification stating the reclaimed amount.
+- repo-hygiene check runs once per day instead of once per invocation.
 - Source ownership moved into `human-plugins`.
 - Launchd paths are rendered by the atomic installer instead of containing a
   fixed username.
 - Launchd classifies cleanup as background, low-priority filesystem I/O.
 
 ### Added
+- `disk-guardd status`: available space vs threshold, Rider gate, last
+  heartbeat, last fire, launchd run count.
+- Tier 1 gains `~/.npm/_cacache` and `docker system prune -f` (only while
+  OrbStack is already running, so the CLI cannot boot the VM).
 - Threshold no-op test, deterministic package, installed health check, and
   rollback exercise.
 
