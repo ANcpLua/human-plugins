@@ -91,6 +91,49 @@ guard smoother.smooth([process(120, name: "replacement")])[0].cpuPercent == 120 
 }
 print("ok    process CPU smoothing dampens bursts without capping multicore usage")
 
+// 60 s window: a process idling at 5% that spikes to 300% for one sample
+// every 10 samples must keep the spike in its ring, rank above a steady 50%
+// worker, and linger for `grace` samples after it exits.
+var history = ProcessCPUHistory(capacity: 30, grace: 5)
+func worker(_ pid: Int32, _ cpu: Double, name: String) -> ProcessView {
+    ProcessView(pid: pid, ppid: 1, name: name, cpuPercent: cpu, footprintBytes: 1, residentBytes: 1)
+}
+for tick in 0..<30 {
+    let bursty = worker(7, tick % 10 == 9 ? 300 : 5, name: "bursty")
+    history.record([bursty, worker(8, 50, name: "steady")])
+}
+let ranked = history.tracks()
+guard ranked.map(\.last.name) == ["bursty", "steady"] else {
+    fail("history ranked by latest value, not by window peak: \(ranked.map(\.last.name))")
+}
+guard ranked[0].peak == 300, ranked[0].samples.count == 30,
+      ranked[0].samples.filter({ $0 == 300 }).count == 3 else {
+    fail("burst samples were lost from the ring")
+}
+guard ranked[0].samples.last == 300, ranked[0].samples.first == 5 else {
+    fail("ring is not ordered oldest to newest")
+}
+guard ranked[0].isAlive else { fail("live process reported as exited") }
+for _ in 0..<5 {
+    history.record([worker(8, 50, name: "steady")])
+}
+guard let lingering = history.track(ProcessCPUHistory.Identity(worker(7, 0, name: "bursty"))),
+      !lingering.isAlive, lingering.samples.suffix(5).allSatisfy({ $0 == nil }) else {
+    fail("exited process did not linger for the grace period")
+}
+history.record([worker(8, 50, name: "steady")])
+guard history.track(ProcessCPUHistory.Identity(worker(7, 0, name: "bursty"))) == nil else {
+    fail("exited process outlived the grace period")
+}
+let grouped = history.series([
+    ProcessCPUHistory.Identity(worker(8, 0, name: "steady")),
+    ProcessCPUHistory.Identity(worker(9, 0, name: "absent"))
+])
+guard grouped.count == 30, grouped.allSatisfy({ $0 == 50 }) else {
+    fail("group series did not sum member windows")
+}
+print("ok    60 s history keeps one-sample bursts visible and ranks by window peak")
+
 let gib: UInt64 = 1_073_741_824
 let alarmSnapshot = Snapshot(
     cpuPercent: 0,

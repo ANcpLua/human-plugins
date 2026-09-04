@@ -12,6 +12,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private var alarmState = AlarmState()
     private var claudeAlertState = ClaudeAlertState()
     private var processCPUSmoother = ProcessCPUSmoother()
+    /// Raw per-process CPU for the last 60 s (30 samples at the 2 s tick).
+    /// Ranks the process list by window peak and lets exited rows linger.
+    private var history = ProcessCPUHistory()
     private var previous: Frame?
     private var lastSnapshot: Snapshot?
     private var claudeSnapshot: ClaudeTelemetrySnapshot?
@@ -113,6 +116,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         switch result {
         case let .success((frame, snapshot)):
             previous = frame
+            history.record(snapshot.processes)
             let processes = processCPUSmoother.smooth(snapshot.processes)
             let displaySnapshot = Snapshot(
                 cpuPercent: snapshot.cpuPercent,
@@ -174,8 +178,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(viewItem(ProcessHeaderView()))
         let processLimit = claudeSnapshot == nil ? 12 : 8
-        for group in Derive.groups(snapshot.processes).prefix(processLimit) {
+        let groups = rankedGroups(snapshot)
+        for group in groups.prefix(processLimit) {
             menu.addItem(groupItem(group))
+        }
+        for track in lingeringTracks(excluding: groups).prefix(2) {
+            menu.addItem(exitedItem(track))
         }
 
         menu.addItem(.separator())
@@ -329,6 +337,39 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         return clamped((snapshot.cpuPercent ?? 0) / capacity)
     }
 
+    /// Groups ordered by their 60 s window peak, so a process that spiked ten
+    /// samples ago stays where the eye left it instead of dropping to the
+    /// bottom the moment it goes quiet.
+    private func rankedGroups(_ snapshot: Snapshot) -> [ProcessGroup] {
+        Derive.groups(snapshot.processes)
+            .map { group in (group, history.peak(group.members.map(ProcessCPUHistory.Identity.init))) }
+            .sorted { lhs, rhs in
+                guard lhs.1 == rhs.1 else { return lhs.1 > rhs.1 }
+                return (lhs.0.cpuPercent ?? -1) > (rhs.0.cpuPercent ?? -1)
+            }
+            .map(\.0)
+    }
+
+    /// Exited processes still inside their grace window, most notable first.
+    /// Only ones that did something (peak >= 5%) earn a lingering row.
+    private func lingeringTracks(excluding groups: [ProcessGroup]) -> [ProcessCPUHistory.Track] {
+        let live = Set(groups.flatMap { $0.members.map(\.pid) })
+        return history.tracks().filter { !$0.isAlive && $0.peak >= 5 && !live.contains($0.last.pid) }
+    }
+
+    private func exitedItem(_ track: ProcessCPUHistory.Track) -> NSMenuItem {
+        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        setRowText(
+            item,
+            cpu: nil,
+            mem: nil,
+            name: "\(track.last.name)  exited",
+            peak: track.peak
+        )
+        item.isEnabled = false
+        return item
+    }
+
     private func groupName(_ group: ProcessGroup) -> String {
         group.members.count > 1 ? "\(group.root.name)  ×\(group.members.count)" : group.root.name
     }
@@ -364,8 +405,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         return item
     }
 
-    private func setRowText(_ item: NSMenuItem, cpu: Double?, mem: UInt64?, name: String) {
-        let cpuText = cpu.map { String(format: "%.0f%%", $0) } ?? "--"
+    private func setRowText(_ item: NSMenuItem, cpu: Double?, mem: UInt64?, name: String, peak: Double? = nil) {
+        let exited = name.hasSuffix("exited")
+        let cpuText = cpu.map { String(format: "%.0f%%", $0) }
+            ?? peak.map { String(format: "^%.0f%%", $0) }
+            ?? "--"
         let memText = mem.map(compactBytes) ?? "--"
         let title = "\(pad(cpuText, 5))  \(pad(memText, 6))  \(name)"
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
@@ -380,11 +424,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             string: "  \(pad(memText, 6))  ",
             attributes: [.font: font, .foregroundColor: mem == nil ? Palette.secondary : Palette.mint]
         ))
+        let nameFont = NSFont.systemFont(ofSize: 12, weight: .medium)
         attributed.append(NSAttributedString(
             string: name,
             attributes: [
-                .font: NSFont.systemFont(ofSize: 12, weight: .medium),
-                .foregroundColor: name.hasSuffix("exited") ? Palette.coral : Palette.primary
+                .font: exited ? NSFontManager.shared.convert(nameFont, toHaveTrait: .italicFontMask) : nameFont,
+                .foregroundColor: exited ? Palette.coral.withAlphaComponent(0.7) : Palette.primary
             ]
         ))
         item.title = title
