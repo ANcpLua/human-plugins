@@ -5,6 +5,33 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 ## Unreleased
 
 ### Added
+- Every top-level process row carries a 60 s CPU sparkline (30 samples at
+  the 2 s tick, raw values, not the smoothed number). Rows are ranked by
+  their window peak, so a process that spikes once every 20 s stays put
+  instead of sinking the moment it goes quiet. Exited processes linger
+  dimmed and italic for five samples, showing their peak, then drop out.
+- The sparkline stacks anything above one core as further layers (blue,
+  amber, amber, coral), so a four-core burst fits a 12 pt row without an
+  axis.
+- "Network per process" toggle in the menu, off by default. When on, each
+  tick also runs `nettop -P -L 1 -J bytes_in,bytes_out` (stdin on
+  `/dev/null`) and the menu widens by a NET column with per-interval
+  download/upload rates summed over the process tree. A counter that runs
+  backwards (pid reuse) is dropped for that interval. Kept as a second column
+  rather than a CPU/NET switch so the spike graph never disappears.
+- "Launch at Login" toggle backed by `SMAppService.mainApp`. It is locked
+  with an explanation while `~/Library/LaunchAgents/dev.ancplua.vitals.plist`
+  exists, so the human-plugins LaunchAgent and a login item can never both be
+  registered. State is re-read every time the menu opens.
+- Session rows in the Claude section copy themselves on click; "COPY ALL"
+  in the SESSIONS header copies every session, hidden ones included. One
+  line per session in ListAgents shape plus pid, cwd, full session id and
+  Claude Code version (`ancplua-d6  ·  interactive  ·  busy  ·  pid 64779  ·
+  /Users/ancplua  ·  session 8fda…  ·  Claude Code 2.1.261`). The row flashes
+  for 150 ms as the only confirmation. Copies go through the general
+  pasteboard so clipboard managers record them.
+
+### Added
 - Disk alarm now `launchctl kickstart`s `dev.ancplua.disk-guard` the moment it
   latches, so cleanup starts immediately instead of at disk-guard's next poll.
 
