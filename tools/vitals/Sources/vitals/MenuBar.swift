@@ -27,7 +27,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private var dashboardView: VitalsDashboardView?
     private var claudeView: ClaudeSectionView?
     private var refreshHintView: HintActionView?
-    private var groupRows: [(pid: Int32, name: String, item: NSMenuItem)] = []
+    private var groupRows: [(pid: Int32, name: String, identities: [ProcessCPUHistory.Identity], view: ProcessRowView)] = []
     private var memberRows: [(pid: Int32, name: String, item: NSMenuItem)] = []
     private let thresholds = Thresholds(
         diskAvailableBytes: 10_000_000_000,
@@ -235,10 +235,18 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             uniquingKeysWith: { first, _ in first }
         )
         for row in groupRows {
+            let series = history.series(row.identities)
+            let peak = series.compactMap { $0 }.max()
             if let group = groups[row.pid] {
-                setRowText(row.item, cpu: group.cpuPercent, mem: group.footprintBytes, name: groupName(group))
+                row.view.update(
+                    cpu: group.cpuPercent, mem: group.footprintBytes, name: groupName(group),
+                    exited: false, peak: peak, series: normalized(series)
+                )
             } else {
-                setRowText(row.item, cpu: nil, mem: nil, name: "\(row.name)  exited")
+                row.view.update(
+                    cpu: nil, mem: nil, name: "\(row.name)  exited",
+                    exited: true, peak: peak, series: normalized(series)
+                )
             }
         }
         let views = Dictionary(
@@ -358,16 +366,23 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     private func exitedItem(_ track: ProcessCPUHistory.Track) -> NSMenuItem {
-        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        setRowText(
-            item,
-            cpu: nil,
-            mem: nil,
-            name: "\(track.last.name)  exited",
-            peak: track.peak
+        let view = ProcessRowView()
+        view.update(
+            cpu: nil, mem: nil, name: "\(track.last.name)  exited",
+            exited: true, peak: track.peak, series: normalized(track.samples)
         )
+        groupRows.append((
+            pid: track.last.pid, name: track.last.name,
+            identities: [ProcessCPUHistory.Identity(track.last)], view: view
+        ))
+        let item = viewItem(view)
         item.isEnabled = false
         return item
+    }
+
+    /// Percent of one core to sparkline units (1.0 = one full core).
+    private func normalized(_ series: [Double?]) -> [Double?] {
+        series.map { $0.map { $0 / 100 } }
     }
 
     private func groupName(_ group: ProcessGroup) -> String {
@@ -379,9 +394,15 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     private func groupItem(_ group: ProcessGroup) -> NSMenuItem {
-        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        setRowText(item, cpu: group.cpuPercent, mem: group.footprintBytes, name: groupName(group))
-        groupRows.append((pid: group.root.pid, name: group.root.name, item: item))
+        let identities = group.members.map(ProcessCPUHistory.Identity.init)
+        let series = history.series(identities)
+        let view = ProcessRowView()
+        view.update(
+            cpu: group.cpuPercent, mem: group.footprintBytes, name: groupName(group),
+            exited: false, peak: series.compactMap { $0 }.max(), series: normalized(series)
+        )
+        groupRows.append((pid: group.root.pid, name: group.root.name, identities: identities, view: view))
+        let item = viewItem(view)
         if group.members.count == 1 {
             item.submenu = actionMenu(for: group.root.pid)
         } else {
@@ -405,11 +426,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         return item
     }
 
-    private func setRowText(_ item: NSMenuItem, cpu: Double?, mem: UInt64?, name: String, peak: Double? = nil) {
+    private func setRowText(_ item: NSMenuItem, cpu: Double?, mem: UInt64?, name: String) {
         let exited = name.hasSuffix("exited")
-        let cpuText = cpu.map { String(format: "%.0f%%", $0) }
-            ?? peak.map { String(format: "^%.0f%%", $0) }
-            ?? "--"
+        let cpuText = cpu.map { String(format: "%.0f%%", $0) } ?? "--"
         let memText = mem.map(compactBytes) ?? "--"
         let title = "\(pad(cpuText, 5))  \(pad(memText, 6))  \(name)"
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
@@ -806,6 +825,7 @@ private final class ProcessHeaderView: NSView {
     private let cpuLabel = NSTextField(labelWithString: "CPU")
     private let memoryLabel = NSTextField(labelWithString: "MEMORY")
     private let processLabel = NSTextField(labelWithString: "TOP PROCESSES")
+    private let windowLabel = NSTextField(labelWithString: "60S")
 
     init() {
         super.init(frame: NSRect(x: 0, y: 0, width: 352, height: 28))
@@ -819,9 +839,14 @@ private final class ProcessHeaderView: NSView {
         cpuLabel.alignment = .right
         memoryLabel.alignment = .right
 
+        windowLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .bold)
+        windowLabel.textColor = Palette.secondary
+        windowLabel.alignment = .right
+
         addSubview(cpuLabel)
         addSubview(memoryLabel)
         addSubview(processLabel)
+        addSubview(windowLabel)
     }
 
     required init?(coder: NSCoder) {
@@ -835,7 +860,13 @@ private final class ProcessHeaderView: NSView {
         processLabel.frame = NSRect(
             x: 124,
             y: 6,
-            width: bounds.width - 140,
+            width: bounds.width - 140 - ProcessRowView.sparklineWidth,
+            height: 14
+        )
+        windowLabel.frame = NSRect(
+            x: bounds.width - 16 - ProcessRowView.sparklineWidth,
+            y: 6,
+            width: ProcessRowView.sparklineWidth,
             height: 14
         )
     }
@@ -879,13 +910,6 @@ private func clamped(_ value: Double) -> Double {
 private func fraction(_ numerator: UInt64, of denominator: UInt64) -> Double {
     guard denominator > 0 else { return 0 }
     return clamped(Double(numerator) / Double(denominator))
-}
-
-private func compactBytes(_ bytes: UInt64) -> String {
-    let gib = Double(bytes) / 1_073_741_824.0
-    if gib >= 10 { return String(format: "%.1fG", gib) }
-    if gib >= 1 { return String(format: "%.2fG", gib) }
-    return String(format: "%.0fM", Double(bytes) / 1_048_576.0)
 }
 
 private func compactDiskBytes(_ bytes: UInt64) -> String {
