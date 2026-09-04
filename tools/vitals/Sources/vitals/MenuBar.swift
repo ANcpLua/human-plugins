@@ -231,8 +231,42 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.addItem(viewItem(hint))
         menu.addItem(.separator())
         menu.addItem(networkToggleItem())
+        menu.addItem(launchAtLoginItem())
         menu.addItem(.separator())
         menu.addItem(quitItem())
+    }
+
+    /// Re-read on every render (the menu is rebuilt on open), so an installer
+    /// run or a System Settings change shows up without restarting.
+    private func launchAtLoginItem() -> NSMenuItem {
+        let state = LaunchAtLogin.state()
+        let title = LaunchAtLogin.title(state)
+        let item = NSMenuItem(title: title, action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        item.target = self
+        switch state {
+        case .enabled, .managedByLaunchd, .requiresApproval: item.state = .on
+        case .disabled, .unavailable: item.state = .off
+        }
+        let locked = state == .managedByLaunchd || state == .unavailable
+        item.isEnabled = !locked
+        item.toolTip = state == .managedByLaunchd
+            ? "The human-plugins installer keeps Vitals alive through \(LaunchAtLogin.agentLabel). Remove that agent to use a plain login item."
+            : nil
+        item.attributedTitle = NSAttributedString(
+            string: title,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+                .foregroundColor: locked ? Palette.secondary : Palette.primary
+            ]
+        )
+        return item
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        if case let .failure(error) = LaunchAtLogin.toggle() {
+            Printer.err("launch at login: \(error.localizedDescription)")
+        }
+        if let lastSnapshot, menuIsOpen { render(lastSnapshot) }
     }
 
     private func networkToggleItem() -> NSMenuItem {
