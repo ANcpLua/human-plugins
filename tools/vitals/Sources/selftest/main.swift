@@ -134,6 +134,36 @@ guard grouped.count == 30, grouped.allSatisfy({ $0 == 50 }) else {
 }
 print("ok    60 s history keeps one-sample bursts visible and ranks by window peak")
 
+// nettop parsing and per-interval rates. Process names may contain dots.
+let nettopA = """
+,bytes_in,bytes_out,
+launchd.1,0,0,
+com.apple.WebKit.Networking.4242,1000,500,
+Claude.777,20000,3000,
+garbage line
+"""
+let nettopB = """
+,bytes_in,bytes_out,
+launchd.1,0,0,
+com.apple.WebKit.Networking.4242,3000,500,
+Claude.777,10000,4000,
+"""
+let frameA = NetworkFrame(monotonicNanos: 0, counters: Network.parse(nettopA))
+let frameB = NetworkFrame(monotonicNanos: 2_000_000_000, counters: Network.parse(nettopB))
+guard frameA.counters.count == 3, frameA.counters[4242] == NetworkCounters(bytesIn: 1000, bytesOut: 500) else {
+    fail("nettop parser mis-read a dotted process name: \(frameA.counters)")
+}
+let rates = Network.rates(previous: frameA, current: frameB)
+guard rates[4242] == NetworkRate(inPerSecond: 1000, outPerSecond: 0) else {
+    fail("network rate is not bytes per second over the interval: \(String(describing: rates[4242]))")
+}
+guard rates[777] == nil else { fail("a counter that went backwards was reported as a rate") }
+guard Network.groupRate(pids: [1, 4242, 9], in: rates) == NetworkRate(inPerSecond: 1000, outPerSecond: 0),
+      Network.groupRate(pids: [9], in: rates) == nil else {
+    fail("group rate did not sum only the members with readings")
+}
+print("ok    nettop counters become per-interval rates, resets are dropped")
+
 let gib: UInt64 = 1_073_741_824
 let alarmSnapshot = Snapshot(
     cpuPercent: 0,

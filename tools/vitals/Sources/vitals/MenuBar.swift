@@ -16,6 +16,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     /// Ranks the process list by window peak and lets exited rows linger.
     private var history = ProcessCPUHistory()
     private var previous: Frame?
+    /// Opt-in: nettop costs real CPU per sample, so it is off unless the user
+    /// switches it on in the menu. Persisted in UserDefaults.
+    private var networkEnabled = UserDefaults.standard.bool(forKey: MenuBarController.networkDefaultsKey)
+    private var previousNetwork: NetworkFrame?
+    private var networkRates: [Int32: NetworkRate] = [:]
+    private static let networkDefaultsKey = "networkStatsEnabled"
     private var lastSnapshot: Snapshot?
     private var claudeSnapshot: ClaudeTelemetrySnapshot?
     private var claudeSessions = ClaudeSessionsSnapshot.empty
@@ -44,7 +50,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         statusItem.button?.image?.isTemplate = true
         statusItem.button?.imagePosition = .imageLeading
         menu.appearance = NSAppearance(named: .darkAqua)
-        menu.minimumWidth = 352
+        menu.minimumWidth = menuWidth
         statusItem.menu = menu
         menu.delegate = self
         menu.addItem(quitItem())
@@ -92,30 +98,53 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
     }
 
+    private var menuWidth: CGFloat { networkEnabled ? 352 + ProcessRowView.networkWidth + 8 : 352 }
+
     private func refresh() {
         let last = previous
+        let wantsNetwork = networkEnabled
         let sample = Task.detached(priority: .utility) {
-            Self.sample(previous: last)
+            Self.sample(previous: last, network: wantsNetwork)
         }
         Task { [weak self] in
             self?.apply(await sample.value)
         }
     }
 
-    nonisolated private static func sample(previous: Frame?) -> Result<(Frame, Snapshot), MetricsError> {
-        if let previous {
-            return Sampler.capture().map { ($0, Derive.snapshot(previous: previous, current: $0)) }
-        }
-        return Sampler.capture().flatMap { first in
-            usleep(300_000)
-            return Sampler.capture().map { ($0, Derive.snapshot(previous: first, current: $0)) }
-        }
+    private struct Sample: Sendable {
+        let frame: Frame
+        let snapshot: Snapshot
+        /// `nil` when network sampling is off or nettop failed; a failed
+        /// nettop run must never take the CPU/memory tick down with it.
+        let network: NetworkFrame?
     }
 
-    private func apply(_ result: Result<(Frame, Snapshot), MetricsError>) {
+    nonisolated private static func sample(previous: Frame?, network: Bool) -> Result<Sample, MetricsError> {
+        let metrics: Result<(Frame, Snapshot), MetricsError>
+        if let previous {
+            metrics = Sampler.capture().map { ($0, Derive.snapshot(previous: previous, current: $0)) }
+        } else {
+            metrics = Sampler.capture().flatMap { first in
+                usleep(300_000)
+                return Sampler.capture().map { ($0, Derive.snapshot(previous: first, current: $0)) }
+            }
+        }
+        let networkFrame = network ? try? NetworkSampler.capture().get() : nil
+        return metrics.map { Sample(frame: $0.0, snapshot: $0.1, network: networkFrame) }
+    }
+
+    private func apply(_ result: Result<Sample, MetricsError>) {
         switch result {
-        case let .success((frame, snapshot)):
+        case let .success(sample):
+            let frame = sample.frame
+            let snapshot = sample.snapshot
             previous = frame
+            if let current = sample.network {
+                if let before = previousNetwork {
+                    networkRates = Network.rates(previous: before, current: current)
+                }
+                previousNetwork = current
+            }
             history.record(snapshot.processes)
             let processes = processCPUSmoother.smooth(snapshot.processes)
             let displaySnapshot = Snapshot(
@@ -176,7 +205,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        menu.addItem(viewItem(ProcessHeaderView()))
+        menu.addItem(viewItem(ProcessHeaderView(showsNetwork: networkEnabled)))
         let processLimit = claudeSnapshot == nil ? 12 : 8
         let groups = rankedGroups(snapshot)
         for group in groups.prefix(processLimit) {
@@ -201,7 +230,30 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         refreshHintView = hint
         menu.addItem(viewItem(hint))
         menu.addItem(.separator())
+        menu.addItem(networkToggleItem())
+        menu.addItem(.separator())
         menu.addItem(quitItem())
+    }
+
+    private func networkToggleItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Network per process", action: #selector(toggleNetwork), keyEquivalent: "")
+        item.target = self
+        item.state = networkEnabled ? .on : .off
+        item.toolTip = "Runs nettop every 2 s while the menu is open. Costs CPU, off by default."
+        item.attributedTitle = NSAttributedString(
+            string: "Network per process",
+            attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: Palette.primary]
+        )
+        return item
+    }
+
+    @objc private func toggleNetwork() {
+        networkEnabled.toggle()
+        UserDefaults.standard.set(networkEnabled, forKey: Self.networkDefaultsKey)
+        previousNetwork = nil
+        networkRates = [:]
+        menu.minimumWidth = menuWidth
+        refresh()
     }
 
     private func claudeSectionModel() -> ClaudeSectionModel? {
@@ -240,12 +292,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             if let group = groups[row.pid] {
                 row.view.update(
                     cpu: group.cpuPercent, mem: group.footprintBytes, name: groupName(group),
-                    exited: false, peak: peak, series: normalized(series)
+                    exited: false, peak: peak, series: normalized(series),
+                    net: Network.groupRate(pids: group.members.map(\.pid), in: networkRates)
                 )
             } else {
                 row.view.update(
                     cpu: nil, mem: nil, name: "\(row.name)  exited",
-                    exited: true, peak: peak, series: normalized(series)
+                    exited: true, peak: peak, series: normalized(series), net: nil
                 )
             }
         }
@@ -366,10 +419,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     private func exitedItem(_ track: ProcessCPUHistory.Track) -> NSMenuItem {
-        let view = ProcessRowView()
+        let view = ProcessRowView(showsNetwork: networkEnabled)
         view.update(
             cpu: nil, mem: nil, name: "\(track.last.name)  exited",
-            exited: true, peak: track.peak, series: normalized(track.samples)
+            exited: true, peak: track.peak, series: normalized(track.samples), net: nil
         )
         groupRows.append((
             pid: track.last.pid, name: track.last.name,
@@ -396,10 +449,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private func groupItem(_ group: ProcessGroup) -> NSMenuItem {
         let identities = group.members.map(ProcessCPUHistory.Identity.init)
         let series = history.series(identities)
-        let view = ProcessRowView()
+        let view = ProcessRowView(showsNetwork: networkEnabled)
         view.update(
             cpu: group.cpuPercent, mem: group.footprintBytes, name: groupName(group),
-            exited: false, peak: series.compactMap { $0 }.max(), series: normalized(series)
+            exited: false, peak: series.compactMap { $0 }.max(), series: normalized(series),
+            net: Network.groupRate(pids: group.members.map(\.pid), in: networkRates)
         )
         groupRows.append((pid: group.root.pid, name: group.root.name, identities: identities, view: view))
         let item = viewItem(view)
@@ -826,8 +880,11 @@ private final class ProcessHeaderView: NSView {
     private let memoryLabel = NSTextField(labelWithString: "MEMORY")
     private let processLabel = NSTextField(labelWithString: "TOP PROCESSES")
     private let windowLabel = NSTextField(labelWithString: "60S")
+    private let networkLabel = NSTextField(labelWithString: "NET ↓↑ /S")
+    private let showsNetwork: Bool
 
-    init() {
+    init(showsNetwork: Bool) {
+        self.showsNetwork = showsNetwork
         super.init(frame: NSRect(x: 0, y: 0, width: 352, height: 28))
 
         cpuLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .bold)
@@ -842,6 +899,11 @@ private final class ProcessHeaderView: NSView {
         windowLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .bold)
         windowLabel.textColor = Palette.secondary
         windowLabel.alignment = .right
+        networkLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .bold)
+        networkLabel.textColor = Palette.secondary
+        networkLabel.alignment = .right
+        networkLabel.isHidden = !showsNetwork
+        addSubview(networkLabel)
 
         addSubview(cpuLabel)
         addSubview(memoryLabel)
@@ -857,18 +919,12 @@ private final class ProcessHeaderView: NSView {
         super.layout()
         cpuLabel.frame = NSRect(x: 16, y: 6, width: 36, height: 14)
         memoryLabel.frame = NSRect(x: 60, y: 6, width: 52, height: 14)
-        processLabel.frame = NSRect(
-            x: 124,
-            y: 6,
-            width: bounds.width - 140 - ProcessRowView.sparklineWidth,
-            height: 14
-        )
-        windowLabel.frame = NSRect(
-            x: bounds.width - 16 - ProcessRowView.sparklineWidth,
-            y: 6,
-            width: ProcessRowView.sparklineWidth,
-            height: 14
-        )
+        let sparkX = bounds.width - 16 - ProcessRowView.sparklineWidth
+        let netX = sparkX - 8 - ProcessRowView.networkWidth
+        let nameEnd = showsNetwork ? netX : sparkX
+        processLabel.frame = NSRect(x: 124, y: 6, width: max(0, nameEnd - 124 - 10), height: 14)
+        networkLabel.frame = NSRect(x: netX, y: 6, width: ProcessRowView.networkWidth, height: 14)
+        windowLabel.frame = NSRect(x: sparkX, y: 6, width: ProcessRowView.sparklineWidth, height: 14)
     }
 }
 

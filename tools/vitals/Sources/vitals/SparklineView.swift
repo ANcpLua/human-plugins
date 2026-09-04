@@ -1,4 +1,5 @@
 import AppKit
+import VitalsCore
 
 /// Stacked area sparkline for a 60 s CPU window. Values are in cores
 /// (1.0 = 100%). Everything above one core is drawn again as a further
@@ -74,13 +75,17 @@ final class SparklineView: NSView {
 final class ProcessRowView: NSView {
     static let height = 22.0
     static let sparklineWidth = 84.0
+    static let networkWidth = 96.0
 
     private let cpuLabel = NSTextField(labelWithString: "")
     private let memLabel = NSTextField(labelWithString: "")
     private let nameLabel = NSTextField(labelWithString: "")
+    private let netLabel = NSTextField(labelWithString: "")
     private let sparkline = SparklineView()
+    private let showsNetwork: Bool
 
-    init() {
+    init(showsNetwork: Bool) {
+        self.showsNetwork = showsNetwork
         super.init(frame: NSRect(x: 0, y: 0, width: 352, height: Self.height))
         let mono = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         cpuLabel.font = mono
@@ -89,9 +94,13 @@ final class ProcessRowView: NSView {
         memLabel.alignment = .right
         nameLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
         nameLabel.lineBreakMode = .byTruncatingTail
+        netLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .medium)
+        netLabel.alignment = .right
+        netLabel.isHidden = !showsNetwork
         addSubview(cpuLabel)
         addSubview(memLabel)
         addSubview(nameLabel)
+        addSubview(netLabel)
         addSubview(sparkline)
     }
 
@@ -99,7 +108,9 @@ final class ProcessRowView: NSView {
         return nil
     }
 
-    func update(cpu: Double?, mem: UInt64?, name: String, exited: Bool, peak: Double?, series: [Double?]) {
+    func update(cpu: Double?, mem: UInt64?, name: String, exited: Bool, peak: Double?, series: [Double?], net: NetworkRate?) {
+        netLabel.stringValue = net.map { "↓\(compactRate($0.inPerSecond)) ↑\(compactRate($0.outPerSecond))" } ?? "--"
+        netLabel.textColor = net.map { $0.total > 0 ? Palette.primary : Palette.secondary } ?? Palette.secondary
         cpuLabel.stringValue = cpu.map { String(format: "%.0f%%", $0) }
             ?? peak.map { String(format: "^%.0f%%", $0) }
             ?? "--"
@@ -119,9 +130,12 @@ final class ProcessRowView: NSView {
     override func layout() {
         super.layout()
         let sparkX = bounds.width - 16 - Self.sparklineWidth
+        let netX = sparkX - 8 - Self.networkWidth
+        let nameEnd = showsNetwork ? netX : sparkX
         cpuLabel.frame = NSRect(x: 16, y: 3, width: 36, height: 16)
         memLabel.frame = NSRect(x: 60, y: 3, width: 52, height: 16)
-        nameLabel.frame = NSRect(x: 124, y: 3, width: max(0, sparkX - 124 - 10), height: 16)
+        nameLabel.frame = NSRect(x: 124, y: 3, width: max(0, nameEnd - 124 - 10), height: 16)
+        netLabel.frame = NSRect(x: netX, y: 3.5, width: Self.networkWidth, height: 15)
         sparkline.frame = NSRect(x: sparkX, y: 5, width: Self.sparklineWidth, height: 12)
     }
 
@@ -130,6 +144,15 @@ final class ProcessRowView: NSView {
         Palette.primary.withAlphaComponent(0.10).setFill()
         NSBezierPath(roundedRect: bounds.insetBy(dx: 6, dy: 1), xRadius: 5, yRadius: 5).fill()
     }
+}
+
+/// "0", "820", "12K", "1.3M", "2.1G" per second, sized for a 96 pt column.
+func compactRate(_ bytesPerSecond: Double) -> String {
+    let value = max(0, bytesPerSecond)
+    if value >= 1_000_000_000 { return String(format: "%.1fG", value / 1_000_000_000) }
+    if value >= 1_000_000 { return String(format: "%.1fM", value / 1_000_000) }
+    if value >= 1_000 { return String(format: "%.0fK", value / 1_000) }
+    return String(format: "%.0f", value)
 }
 
 func compactBytes(_ bytes: UInt64) -> String {
