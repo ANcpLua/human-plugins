@@ -12,6 +12,8 @@ public struct ClaudeSession: Sendable, Equatable, Identifiable {
     public let pid: Int32
     public let sessionId: String
     public let name: String
+    /// `interactive` for a terminal session; the registry's `kind` field.
+    public let kind: String
     public let status: Status
     public let cwd: String
     public let startedAt: Date
@@ -24,6 +26,7 @@ public struct ClaudeSession: Sendable, Equatable, Identifiable {
         pid: Int32,
         sessionId: String,
         name: String,
+        kind: String = "interactive",
         status: Status,
         cwd: String,
         startedAt: Date,
@@ -33,6 +36,7 @@ public struct ClaudeSession: Sendable, Equatable, Identifiable {
         self.pid = pid
         self.sessionId = sessionId
         self.name = name
+        self.kind = kind
         self.status = status
         self.cwd = cwd
         self.startedAt = startedAt
@@ -91,6 +95,7 @@ public enum ClaudeSessionParser {
             pid: payload.pid,
             sessionId: payload.sessionId,
             name: payload.name ?? "claude-\(payload.pid)",
+            kind: payload.kind ?? "interactive",
             status: payload.status.flatMap(ClaudeSession.Status.init(rawValue:))
                 ?? .unknown,
             cwd: payload.cwd,
@@ -160,4 +165,34 @@ private struct SessionPayload: Decodable {
     let kind: String?
     let entrypoint: String?
     let version: String?
+}
+
+/// Plain-text form of the session list, shaped like Claude Code's own
+/// ListAgents output so it can be pasted straight into a chat, plus the
+/// fields only Vitals knows (pid, cwd, full session id, version). No short
+/// bracketed ref: Claude Code derives that one internally and does not write
+/// it to the registry file, and the name alone is the messaging address.
+public enum ClaudeSessionText {
+    public static let separator = "  ·  "
+
+    public static func line(_ session: ClaudeSession) -> String {
+        var parts = [
+            session.name,
+            session.kind,
+            session.status.rawValue,
+            "pid \(session.pid)",
+            session.cwd,
+            "session \(session.sessionId)"
+        ]
+        if let version = session.version {
+            parts.append("Claude Code \(version)")
+        }
+        return parts.joined(separator: separator)
+    }
+
+    /// One line per session, newline-terminated, in registry order
+    /// (busy first, then newest first).
+    public static func lines(_ sessions: [ClaudeSession]) -> String {
+        sessions.map(line).map { $0 + "\n" }.joined()
+    }
 }

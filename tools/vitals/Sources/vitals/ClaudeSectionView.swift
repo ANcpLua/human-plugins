@@ -54,6 +54,7 @@ final class ClaudeSectionView: NSView {
     private let messageLabel = NSTextField(labelWithString: "")
     private let sessionsLabel = NSTextField(labelWithString: "SESSIONS")
     private let sessionsDetail = NSTextField(labelWithString: "")
+    private let copyAllLabel = FlashLabel(text: "COPY ALL")
     private let moreLabel = NSTextField(labelWithString: "")
     private var usageRows: [MetricBarView] = []
     private var sessionRows: [ClaudeSessionRowView] = []
@@ -86,11 +87,18 @@ final class ClaudeSectionView: NSView {
         moreLabel.font = NSFont.systemFont(ofSize: 11, weight: .medium)
         moreLabel.textColor = Palette.secondary
 
+        copyAllLabel.toolTip = "Copy every session, including hidden ones, one line each"
+        copyAllLabel.onClick = { [weak self] in
+            guard let self else { return }
+            Clipboard.copy(ClaudeSessionText.lines(self.model.sessions.sessions))
+        }
+
         addSubview(sectionLabel)
         addSubview(statusBadge)
         addSubview(messageLabel)
         addSubview(sessionsLabel)
         addSubview(sessionsDetail)
+        addSubview(copyAllLabel)
         addSubview(moreLabel)
         rebuildRows()
         apply()
@@ -151,6 +159,7 @@ final class ClaudeSectionView: NSView {
             ? "none running"
             : "\(busy) busy · \(sessions.sessions.count - busy) idle"
         sessionsDetail.textColor = busy > 0 ? Palette.blue : Palette.secondary
+        copyAllLabel.isHidden = sessions.sessions.isEmpty
         for (view, session) in zip(sessionRows, model.visibleSessions) {
             view.update(session, now: model.now)
         }
@@ -182,8 +191,10 @@ final class ClaudeSectionView: NSView {
         }
 
         y -= ClaudeSectionModel.sessionsHeaderHeight
+        let copyWidth = 66.0
         sessionsLabel.frame = NSRect(x: inset, y: y + 2, width: 100, height: 14)
-        sessionsDetail.frame = NSRect(x: inset + 100, y: y + 2, width: contentWidth - 100, height: 14)
+        sessionsDetail.frame = NSRect(x: inset + 100, y: y + 2, width: contentWidth - 100 - copyWidth - 8, height: 14)
+        copyAllLabel.frame = NSRect(x: width - inset - copyWidth, y: y, width: copyWidth, height: 18)
 
         for row in sessionRows {
             y -= ClaudeSectionModel.sessionRowHeight
@@ -202,9 +213,14 @@ final class ClaudeSessionRowView: NSView {
     private let nameLabel = NSTextField(labelWithString: "")
     private let cwdLabel = NSTextField(labelWithString: "")
     private let ageLabel = NSTextField(labelWithString: "")
+    private var session: ClaudeSession?
 
     init() {
         super.init(frame: NSRect(x: 0, y: 0, width: 320, height: 22))
+
+        wantsLayer = true
+        layer?.cornerRadius = 5
+        addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(copySession)))
 
         dot.wantsLayer = true
         dot.layer?.cornerRadius = 3.5
@@ -231,7 +247,14 @@ final class ClaudeSessionRowView: NSView {
         return nil
     }
 
+    @objc private func copySession() {
+        guard let session else { return }
+        Clipboard.copy(ClaudeSessionText.line(session))
+        flash(self)
+    }
+
     func update(_ session: ClaudeSession, now: Date) {
+        self.session = session
         let color: NSColor
         switch session.status {
         case .busy: color = Palette.blue
@@ -245,6 +268,7 @@ final class ClaudeSessionRowView: NSView {
         ageLabel.textColor = session.status == .busy ? Palette.blue : Palette.secondary
         toolTip = "pid \(session.pid) · \(session.cwd)\nsession \(session.sessionId)"
             + (session.version.map { "\nClaude Code \($0)" } ?? "")
+            + "\nClick to copy this line"
         needsLayout = true
     }
 
@@ -268,5 +292,66 @@ final class ClaudeSessionRowView: NSView {
             height: 15
         )
         ageLabel.frame = NSRect(x: width - ageWidth, y: 3.5, width: ageWidth, height: 15)
+    }
+}
+
+/// Small clickable caption ("COPY ALL") that flashes on click.
+@MainActor
+final class FlashLabel: NSView {
+    private let label: NSTextField
+    var onClick: (@MainActor () -> Void)?
+
+    init(text: String) {
+        label = NSTextField(labelWithString: text)
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 9
+        label.font = NSFont.systemFont(ofSize: 9.5, weight: .bold)
+        label.textColor = Palette.secondary
+        label.alignment = .center
+        label.drawsBackground = true
+        label.backgroundColor = Palette.track
+        label.wantsLayer = true
+        label.layer?.cornerRadius = 9
+        label.layer?.masksToBounds = true
+        addSubview(label)
+        addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(clicked)))
+    }
+
+    required init?(coder: NSCoder) {
+        return nil
+    }
+
+    override func layout() {
+        super.layout()
+        label.frame = bounds
+    }
+
+    @objc private func clicked() {
+        onClick?()
+        flash(self)
+    }
+}
+
+/// 150 ms background pulse as the only copy confirmation: no alert, no sound.
+@MainActor
+func flash(_ view: NSView) {
+    view.wantsLayer = true
+    let highlight = Palette.primary.withAlphaComponent(0.22).cgColor
+    let pulse = CABasicAnimation(keyPath: "backgroundColor")
+    pulse.fromValue = highlight
+    pulse.toValue = NSColor.clear.cgColor
+    pulse.duration = 0.15
+    view.layer?.add(pulse, forKey: "flash")
+}
+
+enum Clipboard {
+    /// Replaces the pasteboard contents. Goes through the general pasteboard
+    /// on purpose so clipboard managers such as Maccy record it.
+    @MainActor
+    static func copy(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 }

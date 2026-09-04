@@ -263,6 +263,29 @@ do {
     )
     expect(emptyRegistry.sessions.isEmpty, "missing sessions directory did not yield an empty snapshot")
 
+    let textSession = ClaudeSession(
+        pid: 64779,
+        sessionId: "8fda8e42-ad9a-4e43-9a38-11f4af698120",
+        name: "ancplua-d6",
+        kind: "interactive",
+        status: .busy,
+        cwd: "/Users/ancplua",
+        startedAt: registryNow,
+        updatedAt: registryNow,
+        version: "2.1.261"
+    )
+    expect(
+        ClaudeSessionText.line(textSession)
+            == "ancplua-d6  ·  interactive  ·  busy  ·  pid 64779  ·  /Users/ancplua  ·  session 8fda8e42-ad9a-4e43-9a38-11f4af698120  ·  Claude Code 2.1.261",
+        "session clipboard line has the wrong shape: \(ClaudeSessionText.line(textSession))"
+    )
+    expect(
+        ClaudeSessionText.lines(registry.sessions)
+            == "customer-desk-82  ·  interactive  ·  busy  ·  pid 2663  ·  /Users/ancplua/repo-playground/customer-desk  ·  session b30104f9  ·  Claude Code 2.1.239\n"
+            + "ancplua-bd  ·  interactive  ·  idle  ·  pid 1274  ·  /Users/ancplua  ·  session f2b61b80\n",
+        "session clipboard text does not list every session, one per line, version optional"
+    )
+
     let credential = try ClaudeCredentialStore.decode(Data(
         """
         {"claudeAiOauth":{"accessToken":"sk-ant-test","expiresAt":1787400000000,"scopes":["user:inference"]}}
