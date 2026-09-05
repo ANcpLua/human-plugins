@@ -164,6 +164,32 @@ guard Network.groupRate(pids: [1, 4242, 9], in: rates) == NetworkRate(inPerSecon
 }
 print("ok    nettop counters become per-interval rates, resets are dropped")
 
+// Awake policy: holds only when the mode's condition is met, warns when the
+// OS will sleep regardless (lid closed on battery), and is pure.
+let docked = PowerContext(lidClosed: true, lidClosesSleep: false, source: .ac, externalDisplays: 1)
+let unplugged = PowerContext(lidClosed: true, lidClosesSleep: true, source: .battery, externalDisplays: 0)
+let open = PowerContext(lidClosed: false, lidClosesSleep: true, source: .battery, externalDisplays: 0)
+guard Awake.decide(mode: .off, context: docked) == AwakeDecision(holdSystem: false, holdDisplay: false, reason: "off", warning: false) else {
+    fail("off mode must hold nothing")
+}
+guard Awake.decide(mode: .lidClosed, context: docked) == AwakeDecision(holdSystem: true, holdDisplay: true, reason: "holding · lid closed · AC · 1 external display", warning: false) else {
+    fail("lid-closed mode did not hold in the docked case: \(Awake.decide(mode: .lidClosed, context: docked))")
+}
+guard !Awake.decide(mode: .lidClosed, context: open).holdsAnything,
+      Awake.decide(mode: .lidClosed, context: open).reason == "idle · lid open · battery · 0 external displays" else {
+    fail("lid-closed mode held with the lid open")
+}
+let risky = Awake.decide(mode: .always, context: unplugged)
+guard risky.holdsAnything, risky.warning, risky.reason.hasSuffix("lid close will still sleep on battery") else {
+    fail("battery + lid must warn, not pretend: \(risky)")
+}
+guard Awake.decide(mode: .externalDisplay, context: open).holdsAnything == false,
+      Awake.decide(mode: .externalDisplay, context: docked).holdsAnything else {
+    fail("external-display mode follows the display count")
+}
+let live = PowerSampler.context()
+print("ok    awake policy: lid \(live.lidClosed ? "closed" : "open"), \(live.source.rawValue), \(live.externalDisplays) external, lid-sleep \(live.lidClosesSleep)")
+
 let gib: UInt64 = 1_073_741_824
 let alarmSnapshot = Snapshot(
     cpuPercent: 0,

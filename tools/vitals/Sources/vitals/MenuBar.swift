@@ -23,6 +23,15 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private var previousNetwork: NetworkFrame?
     private var networkRates: [Int32: NetworkRate] = [:]
     private static let networkDefaultsKey = "networkStatsEnabled"
+    /// Stay-awake policy. Persisted, re-applied at launch and on every tick,
+    /// so a Vitals restart re-creates the assertions before the display
+    /// notices anything.
+    private var awakeMode = AwakeMode(rawValue: UserDefaults.standard.string(forKey: MenuBarController.awakeDefaultsKey) ?? "") ?? .off
+    private let awakeAssertions = AwakeAssertions()
+    private var powerContext = PowerSampler.context()
+    private var awakeDecision = AwakeDecision(holdSystem: false, holdDisplay: false, reason: "off", warning: false)
+    private var awakeItem: NSMenuItem?
+    private static let awakeDefaultsKey = "awakeMode"
     private var lastSnapshot: Snapshot?
     private var claudeSnapshot: ClaudeTelemetrySnapshot?
     private var claudeSessions = ClaudeSessionsSnapshot.empty
@@ -63,6 +72,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         statusItem.menu = menu
         menu.delegate = self
         menu.addItem(quitItem())
+        applyAwake(powerContext)
         refresh()
         refreshClaude()
         Task { [weak self] in
@@ -300,6 +310,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         /// `nil` when network sampling is off or nettop failed; a failed
         /// nettop run must never take the CPU/memory tick down with it.
         let network: NetworkFrame?
+        let power: PowerContext
     }
 
     nonisolated private static func sample(previous: Frame?, network: Bool) -> Result<Sample, MetricsError> {
@@ -313,7 +324,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             }
         }
         let networkFrame = network ? try? NetworkSampler.capture().get() : nil
-        return metrics.map { Sample(frame: $0.0, snapshot: $0.1, network: networkFrame) }
+        let power = PowerSampler.context()
+        return metrics.map { Sample(frame: $0.0, snapshot: $0.1, network: networkFrame, power: power) }
     }
 
     private func apply(_ result: Result<Sample, MetricsError>) {
@@ -328,6 +340,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                 }
                 previousNetwork = current
             }
+            applyAwake(sample.power)
             history.record(snapshot.processes)
             let processes = processCPUSmoother.smooth(snapshot.processes)
             let displaySnapshot = Snapshot(
@@ -418,6 +431,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.addItem(viewItem(hint))
         menu.addItem(.separator())
         menu.addItem(networkToggleItem())
+        menu.addItem(awakeMenuItem())
         menu.addItem(launchAtLoginItem())
         menu.addItem(.separator())
         menu.addItem(quitItem())
@@ -466,6 +480,67 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: Palette.primary]
         )
         return item
+    }
+
+    // MARK: Stay awake
+
+    /// Decide and (re)apply. Idempotent, runs every tick; the assertion
+    /// holder only touches IOKit when the wanted state changed.
+    private func applyAwake(_ context: PowerContext) {
+        powerContext = context
+        awakeDecision = Awake.decide(mode: awakeMode, context: context)
+        awakeAssertions.apply(awakeDecision)
+        if menuIsOpen { updateAwakeItem() }
+    }
+
+    private func awakeMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Stay awake", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.appearance = NSAppearance(named: .darkAqua)
+        for mode in AwakeMode.allCases {
+            let choice = NSMenuItem(title: mode.title, action: #selector(chooseAwakeMode(_:)), keyEquivalent: "")
+            choice.target = self
+            choice.representedObject = mode.rawValue
+            choice.state = mode == awakeMode ? .on : .off
+            choice.attributedTitle = NSAttributedString(
+                string: mode.title,
+                attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .medium), .foregroundColor: Palette.primary]
+            )
+            submenu.addItem(choice)
+        }
+        submenu.addItem(.separator())
+        submenu.addItem(label("Holds PreventUserIdleSystemSleep and PreventUserIdleDisplaySleep, the same"))
+        submenu.addItem(label("assertions Clamshell.app uses. Re-applied every 2 s and after a restart."))
+        submenu.addItem(label("Lid-close sleep on battery needs root and is not overridden."))
+        item.submenu = submenu
+        awakeItem = item
+        updateAwakeItem()
+        return item
+    }
+
+    private func updateAwakeItem() {
+        guard let awakeItem else { return }
+        let holding = awakeAssertions.holdsSystem || awakeAssertions.holdsDisplay
+        let title = "Stay awake · \(awakeMode == .off ? "off" : awakeDecision.reason)"
+            + (awakeAssertions.lastError.map { " · \($0)" } ?? "")
+        let color: NSColor = awakeAssertions.lastError != nil
+            ? Palette.coral
+            : awakeDecision.warning ? Palette.amber : holding ? Palette.mint : Palette.primary
+        awakeItem.title = title
+        awakeItem.attributedTitle = NSAttributedString(
+            string: title,
+            attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: color]
+        )
+        awakeItem.state = holding ? .on : .off
+        awakeItem.toolTip = "\(Awake.describe(powerContext)) · system \(awakeAssertions.holdsSystem ? "held" : "free") · display \(awakeAssertions.holdsDisplay ? "held" : "free")"
+    }
+
+    @objc private func chooseAwakeMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let mode = AwakeMode(rawValue: raw) else { return }
+        awakeMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: Self.awakeDefaultsKey)
+        applyAwake(PowerSampler.context())
+        if let lastSnapshot, menuIsOpen { render(lastSnapshot) }
     }
 
     @objc private func toggleNetwork() {

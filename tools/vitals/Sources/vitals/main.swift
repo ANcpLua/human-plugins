@@ -103,6 +103,15 @@ case "claude":
     }
     semaphore.wait()
 
+case "awake":
+    // Lid, power and display facts plus what the persisted stay-awake mode
+    // would do with them. Does not hold anything itself.
+    let context = PowerSampler.context()
+    let mode = AwakeMode(rawValue: UserDefaults.standard.string(forKey: "awakeMode") ?? "") ?? .off
+    let decision = Awake.decide(mode: mode, context: context)
+    Printer.out("context   \(Awake.describe(context)) · lid-close sleeps: \(context.lidClosesSleep)")
+    Printer.out("mode      \(mode.rawValue) · \(decision.reason)")
+
 case "mcp":
     // Headless MCP view: every server Claude Code would see for the live
     // sessions' projects plus home, with cached tool names. `vitals mcp
@@ -136,6 +145,6 @@ case "bar":
     application.run()
 
 default:
-    Printer.err("usage: vitals [snapshot | json | predict <pid> | watch [s] [diskGB] | claude | mcp [refresh] | bar]")
+    Printer.err("usage: vitals [snapshot | json | predict <pid> | watch [s] [diskGB] | claude | mcp [refresh] | awake | bar]")
     exit(2)
 }
