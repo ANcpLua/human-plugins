@@ -22,12 +22,18 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
   is the headless form.
 - "Stay awake" modes: Off, Always, While the lid is closed, While an
   external display is attached. Holds `PreventUserIdleSystemSleep` and
-  `PreventUserIdleDisplaySleep`, the two assertions Clamshell.app holds,
-  through a pure policy over lid state (`AppleClamshellState`), power source
-  and external display count. The mode is persisted and re-applied at launch
-  and on every 2 s tick, so a restart no longer drops the external display.
-  On battery with the lid closed the row turns amber and says that lid-close
-  sleep needs root, instead of pretending. `vitals awake` prints the facts.
+  `PreventUserIdleDisplaySleep` and clears the kernel's clamshell-sleep flag
+  through `kPMSetClamshellSleepState` on the `IOPMrootDomain` user client,
+  the three things Clamshell.app does, so a closed lid on battery keeps the
+  external displays on. No root and no daemon: the call is open to any
+  process. The policy is pure over lid state (`AppleClamshellState`), power
+  source and external display count; the lid and display modes arm the flag
+  only while an external display is attached, so a closed lid in a bag still
+  sleeps, and Always arms it regardless. Persisted and re-applied at launch
+  and on every 2 s tick. The flag is shared kernel state and Clamshell.app
+  flips the same bit, so run one of the two. Quitting Vitals or choosing Off
+  clears the flag, which sleeps a closed-lid Mac on battery at once.
+  `vitals awake` prints the facts.
 - Every top-level process row carries a 60 s CPU sparkline (30 samples at
   the 2 s tick, raw values, not the smoothed number). Rows are ranked by
   their window peak, so a process that spikes once every 20 s stays put

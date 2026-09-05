@@ -110,7 +110,7 @@ case "awake":
     let mode = AwakeMode(rawValue: UserDefaults.standard.string(forKey: "awakeMode") ?? "") ?? .off
     let decision = Awake.decide(mode: mode, context: context)
     Printer.out("context   \(Awake.describe(context)) · lid-close sleeps: \(context.lidClosesSleep)")
-    Printer.out("mode      \(mode.rawValue) · \(decision.reason)")
+    Printer.out("mode      \(mode.rawValue) · \(decision.reason) · lid-close override \(decision.overrideLidSleep ? "wanted" : "not wanted")")
 
 case "mcp":
     // Headless MCP view: every server Claude Code would see for the live

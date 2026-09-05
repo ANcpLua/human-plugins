@@ -164,27 +164,36 @@ guard Network.groupRate(pids: [1, 4242, 9], in: rates) == NetworkRate(inPerSecon
 }
 print("ok    nettop counters become per-interval rates, resets are dropped")
 
-// Awake policy: holds only when the mode's condition is met, warns when the
-// OS will sleep regardless (lid closed on battery), and is pure.
+// Awake policy: holds only when the mode's condition is met, arms the
+// lid-close override before the lid closes but never without a display
+// unless Always, warns when the lid will still sleep, and is pure.
 let docked = PowerContext(lidClosed: true, lidClosesSleep: false, source: .ac, externalDisplays: 1)
 let unplugged = PowerContext(lidClosed: true, lidClosesSleep: true, source: .battery, externalDisplays: 0)
 let open = PowerContext(lidClosed: false, lidClosesSleep: true, source: .battery, externalDisplays: 0)
-guard Awake.decide(mode: .off, context: docked) == AwakeDecision(holdSystem: false, holdDisplay: false, reason: "off", warning: false) else {
+let openDocked = PowerContext(lidClosed: false, lidClosesSleep: true, source: .battery, externalDisplays: 2)
+guard Awake.decide(mode: .off, context: docked) == AwakeDecision(holdSystem: false, holdDisplay: false, overrideLidSleep: false, reason: "off", warning: false) else {
     fail("off mode must hold nothing")
 }
-guard Awake.decide(mode: .lidClosed, context: docked) == AwakeDecision(holdSystem: true, holdDisplay: true, reason: "holding · lid closed · AC · 1 external display", warning: false) else {
+guard Awake.decide(mode: .lidClosed, context: docked) == AwakeDecision(holdSystem: true, holdDisplay: true, overrideLidSleep: true, reason: "holding · lid closed · AC · 1 external display", warning: false) else {
     fail("lid-closed mode did not hold in the docked case: \(Awake.decide(mode: .lidClosed, context: docked))")
+}
+guard Awake.decide(mode: .lidClosed, context: openDocked) == AwakeDecision(holdSystem: false, holdDisplay: false, overrideLidSleep: true, reason: "armed · lid open · battery · 2 external displays", warning: false) else {
+    fail("lid-closed mode must arm the override before the lid closes: \(Awake.decide(mode: .lidClosed, context: openDocked))")
 }
 guard !Awake.decide(mode: .lidClosed, context: open).holdsAnything,
       Awake.decide(mode: .lidClosed, context: open).reason == "idle · lid open · battery · 0 external displays" else {
-    fail("lid-closed mode held with the lid open")
+    fail("lid-closed mode held with the lid open and no display")
 }
-let risky = Awake.decide(mode: .always, context: unplugged)
-guard risky.holdsAnything, risky.warning, risky.reason.hasSuffix("lid close will still sleep on battery") else {
-    fail("battery + lid must warn, not pretend: \(risky)")
+let bagged = Awake.decide(mode: .lidClosed, context: unplugged)
+guard bagged.holdSystem, !bagged.overrideLidSleep, bagged.warning, bagged.reason.hasSuffix("lid close sleeps without a display") else {
+    fail("lid-closed mode without a display must let a bagged Mac sleep: \(bagged)")
+}
+let headless = Awake.decide(mode: .always, context: unplugged)
+guard headless.holdSystem, headless.overrideLidSleep, !headless.warning, headless.reason == "holding · lid closed · battery · 0 external displays" else {
+    fail("always must override lid sleep on battery too: \(headless)")
 }
 guard Awake.decide(mode: .externalDisplay, context: open).holdsAnything == false,
-      Awake.decide(mode: .externalDisplay, context: docked).holdsAnything else {
+      Awake.decide(mode: .externalDisplay, context: docked) == AwakeDecision(holdSystem: true, holdDisplay: true, overrideLidSleep: true, reason: "holding · lid closed · AC · 1 external display", warning: false) else {
     fail("external-display mode follows the display count")
 }
 let live = PowerSampler.context()

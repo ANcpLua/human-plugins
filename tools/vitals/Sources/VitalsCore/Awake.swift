@@ -9,9 +9,10 @@ public struct PowerContext: Sendable, Equatable, Codable {
 
     /// `AppleClamshellState`: the lid is physically closed.
     public let lidClosed: Bool
-    /// `AppleClamshellCausesSleep`: closing the lid sleeps the Mac. macOS
-    /// clears it on AC with an external display; on battery it is set and
-    /// no unprivileged assertion can override it.
+    /// `AppleClamshellCausesSleep`: closing the lid sleeps the Mac right now.
+    /// macOS clears it on AC with an external display; any process can clear
+    /// it through `kPMSetClamshellSleepState` on `IOPMrootDomain`, which is
+    /// what `AwakeAssertions` does when the decision asks for it.
     public let lidClosesSleep: Bool
     public let source: Source
     public let externalDisplays: Int
@@ -51,48 +52,61 @@ public struct AwakeDecision: Sendable, Equatable {
     public let holdSystem: Bool
     /// Hold `PreventUserIdleDisplaySleep`.
     public let holdDisplay: Bool
+    /// Keep the kernel's clamshell-sleep flag cleared so closing the lid does
+    /// not sleep the Mac, on battery included. Armed ahead of the lid close:
+    /// the kernel decides at the moment the lid shuts.
+    public let overrideLidSleep: Bool
     /// One line for the menu: what is held and why, or why it cannot work.
     public let reason: String
     /// True when the mode wants to hold but the OS will sleep anyway.
     public let warning: Bool
 
-    public init(holdSystem: Bool, holdDisplay: Bool, reason: String, warning: Bool) {
+    public init(holdSystem: Bool, holdDisplay: Bool, overrideLidSleep: Bool, reason: String, warning: Bool) {
         self.holdSystem = holdSystem
         self.holdDisplay = holdDisplay
+        self.overrideLidSleep = overrideLidSleep
         self.reason = reason
         self.warning = warning
     }
 
-    public var holdsAnything: Bool { holdSystem || holdDisplay }
+    public var holdsAnything: Bool { holdSystem || holdDisplay || overrideLidSleep }
 }
 
 public enum Awake {
     public static func decide(mode: AwakeMode, context: PowerContext) -> AwakeDecision {
-        let wants: Bool
+        // `hold` keeps the idle assertions; `override` keeps a closed lid from
+        // sleeping the Mac. The override is armed before the lid closes, since
+        // the kernel decides at the moment it shuts, and the lid and display
+        // modes arm it only with an external display attached, so a closed
+        // lid in a bag still sleeps. Always means always.
+        let hold: Bool
+        let override: Bool
         switch mode {
-        case .off: wants = false
-        case .always: wants = true
-        case .lidClosed: wants = context.lidClosed
-        case .externalDisplay: wants = context.externalDisplays > 0
+        case .off:
+            hold = false
+            override = false
+        case .always:
+            hold = true
+            override = true
+        case .lidClosed:
+            hold = context.lidClosed
+            override = context.externalDisplays > 0
+        case .externalDisplay:
+            hold = context.externalDisplays > 0
+            override = hold
         }
-        guard wants else {
-            return AwakeDecision(
-                holdSystem: false, holdDisplay: false,
-                reason: mode == .off ? "off" : "idle · \(describe(context))",
-                warning: false
-            )
+        let state = switch (hold, override) {
+        case (false, false): mode == .off ? "off" : "idle · \(describe(context))"
+        case (false, true): "armed · \(describe(context))"
+        case (true, true): "holding · \(describe(context))"
+        case (true, false): "holding · \(describe(context)) · lid close sleeps without a display"
         }
-        // Assertions stop idle sleep. They do not stop lid-close sleep on
-        // battery: that needs root (`pmset disablesleep`), which Vitals does
-        // not have. Say so instead of pretending.
-        let lidRisk = context.lidClosesSleep && context.source != .ac
         return AwakeDecision(
-            holdSystem: true,
-            holdDisplay: true,
-            reason: lidRisk
-                ? "holding · \(describe(context)) · lid close will still sleep on battery"
-                : "holding · \(describe(context))",
-            warning: lidRisk
+            holdSystem: hold,
+            holdDisplay: hold,
+            overrideLidSleep: override,
+            reason: state,
+            warning: hold && !override
         )
     }
 

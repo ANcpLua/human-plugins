@@ -29,7 +29,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private var awakeMode = AwakeMode(rawValue: UserDefaults.standard.string(forKey: MenuBarController.awakeDefaultsKey) ?? "") ?? .off
     private let awakeAssertions = AwakeAssertions()
     private var powerContext = PowerSampler.context()
-    private var awakeDecision = AwakeDecision(holdSystem: false, holdDisplay: false, reason: "off", warning: false)
+    private var awakeDecision = AwakeDecision(holdSystem: false, holdDisplay: false, overrideLidSleep: false, reason: "off", warning: false)
     private var awakeItem: NSMenuItem?
     private static let awakeDefaultsKey = "awakeMode"
     private var lastSnapshot: Snapshot?
@@ -509,9 +509,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             submenu.addItem(choice)
         }
         submenu.addItem(.separator())
-        submenu.addItem(label("Holds PreventUserIdleSystemSleep and PreventUserIdleDisplaySleep, the same"))
-        submenu.addItem(label("assertions Clamshell.app uses. Re-applied every 2 s and after a restart."))
-        submenu.addItem(label("Lid-close sleep on battery needs root and is not overridden."))
+        submenu.addItem(label("Holds PreventUserIdleSystemSleep and PreventUserIdleDisplaySleep and clears the"))
+        submenu.addItem(label("kernel's clamshell-sleep flag (kPMSetClamshellSleepState), as Clamshell.app does."))
+        submenu.addItem(label("Re-applied every 2 s and after a restart. Lid and display modes arm the flag only"))
+        submenu.addItem(label("while an external display is attached; Always arms it regardless."))
+        submenu.addItem(label("Clamshell.app flips the same flag: run one of the two, not both."))
         item.submenu = submenu
         awakeItem = item
         updateAwakeItem()
@@ -520,7 +522,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private func updateAwakeItem() {
         guard let awakeItem else { return }
-        let holding = awakeAssertions.holdsSystem || awakeAssertions.holdsDisplay
+        let holding = awakeAssertions.holdsSystem || awakeAssertions.holdsDisplay || awakeAssertions.overridesLidSleep
         let title = "Stay awake · \(awakeMode == .off ? "off" : awakeDecision.reason)"
             + (awakeAssertions.lastError.map { " · \($0)" } ?? "")
         let color: NSColor = awakeAssertions.lastError != nil
@@ -532,7 +534,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: color]
         )
         awakeItem.state = holding ? .on : .off
-        awakeItem.toolTip = "\(Awake.describe(powerContext)) · system \(awakeAssertions.holdsSystem ? "held" : "free") · display \(awakeAssertions.holdsDisplay ? "held" : "free")"
+        awakeItem.toolTip = "\(Awake.describe(powerContext)) · system \(awakeAssertions.holdsSystem ? "held" : "free") · display \(awakeAssertions.holdsDisplay ? "held" : "free") · lid-close sleep \(awakeAssertions.overridesLidSleep ? "off" : "on")"
     }
 
     @objc private func chooseAwakeMode(_ sender: NSMenuItem) {
@@ -875,6 +877,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func quit() {
+        // The assertions die with the process; the kernel flag would not.
+        awakeAssertions.releaseAll()
         NSApplication.shared.terminate(nil)
     }
 }
