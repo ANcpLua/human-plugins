@@ -5,6 +5,29 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
 ## Unreleased
 
 ### Added
+- MCP SERVERS block. Reads every scope Claude Code merges (`~/.claude.json`
+  user and per-project servers, `<project>/.mcp.json` with its approval
+  state, plugin `.mcp.json` files) for the projects of the live sessions
+  plus home. One row per server with status dot, scope tag and cached tool
+  count. Click copies the server as one line ending in its callable tool
+  names (`mcp__plugin_playwright_playwright__browser_click, …`); COPY ALL
+  copies every server. The submenu offers a ToolSearch `select:` query for
+  the whole server, a per-tool copy, "Probe tools now" (launches the server
+  once with `initialize` → `tools/list`, cached in
+  `~/Library/Caches/dev.ancplua.vitals/mcp-tools.json`), and a per-project
+  enable/disable toggle that edits `disabledMcpServers` /
+  `enabledMcpjsonServers` exactly like `/mcp` does. Running sessions keep
+  their server set; new sessions pick the change up. A one-time backup of
+  `~/.claude.json` is written before the first edit. `vitals mcp [refresh]`
+  is the headless form.
+- "Stay awake" modes: Off, Always, While the lid is closed, While an
+  external display is attached. Holds `PreventUserIdleSystemSleep` and
+  `PreventUserIdleDisplaySleep`, the two assertions Clamshell.app holds,
+  through a pure policy over lid state (`AppleClamshellState`), power source
+  and external display count. The mode is persisted and re-applied at launch
+  and on every 2 s tick, so a restart no longer drops the external display.
+  On battery with the lid closed the row turns amber and says that lid-close
+  sleep needs root, instead of pretending. `vitals awake` prints the facts.
 - Every top-level process row carries a 60 s CPU sparkline (30 samples at
   the 2 s tick, raw values, not the smoothed number). Rows are ranked by
   their window peak, so a process that spikes once every 20 s stays put
