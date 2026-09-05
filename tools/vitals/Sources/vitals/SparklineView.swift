@@ -83,6 +83,9 @@ final class ProcessRowView: NSView {
     private let netLabel = NSTextField(labelWithString: "")
     private let sparkline = SparklineView()
     private let showsNetwork: Bool
+    /// Last known window peak, so an exited row keeps showing "^16%" after
+    /// its ring has been dropped from the history.
+    private var lastPeak: Double?
 
     init(showsNetwork: Bool) {
         self.showsNetwork = showsNetwork
@@ -109,6 +112,8 @@ final class ProcessRowView: NSView {
     }
 
     func update(cpu: Double?, mem: UInt64?, name: String, exited: Bool, peak: Double?, series: [Double?], net: NetworkRate?) {
+        let peak = peak ?? lastPeak
+        lastPeak = peak
         netLabel.stringValue = net.map { "↓\(compactRate($0.inPerSecond)) ↑\(compactRate($0.outPerSecond))" } ?? "--"
         netLabel.textColor = net.map { $0.total > 0 ? Palette.primary : Palette.secondary } ?? Palette.secondary
         cpuLabel.stringValue = cpu.map { String(format: "%.0f%%", $0) }

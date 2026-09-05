@@ -575,7 +575,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         return item
     }
 
+    /// Item views are created at the default 352 pt; the menu takes its width
+    /// from them, so they are widened here when the NET column is on.
     private func viewItem(_ view: NSView) -> NSMenuItem {
+        view.frame.size.width = menuWidth
         let item = NSMenuItem()
         item.view = view
         return item
