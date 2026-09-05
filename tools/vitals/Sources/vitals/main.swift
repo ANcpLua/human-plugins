@@ -3,6 +3,7 @@ import Foundation
 import VitalsClaude
 import VitalsCore
 import VitalsKernel
+import VitalsMCP
 
 func observe(intervalMicros: UInt32) -> Result<Snapshot, MetricsError> {
     Sampler.capture().flatMap { first in
@@ -102,6 +103,31 @@ case "claude":
     }
     semaphore.wait()
 
+case "mcp":
+    // Headless MCP view: every server Claude Code would see for the live
+    // sessions' projects plus home, with cached tool names. `vitals mcp
+    // refresh` launches each probeable server once for a fresh tools/list.
+    let sessions = ClaudeSessionStore.load()
+    var projects = [FileManager.default.homeDirectoryForCurrentUser.path]
+    for session in sessions.sessions where !projects.contains(session.cwd) { projects.append(session.cwd) }
+    let snapshot = MCPConfigStore.load(projects: projects)
+    var cache = MCPToolCache.load()
+    if arguments.dropFirst().first == "refresh" {
+        for server in snapshot.servers where server.transport.isProbeable {
+            Printer.err("probing \(server.name) …")
+            switch MCPProbe.tools(of: server) {
+            case let .success(tools):
+                cache.records[server.name] = MCPProbeRecord(tools: tools, error: nil, probedAt: Date())
+            case let .failure(error):
+                cache.records[server.name] = MCPProbeRecord(tools: [], error: "\(error)", probedAt: Date())
+            }
+        }
+        try? cache.save()
+    }
+    Printer.out("projects  \(projects.joined(separator: ", "))")
+    Printer.out("servers   \(snapshot.servers.count) · \(cache.toolCount) cached tools")
+    Printer.out(MCPText.lines(snapshot.servers, tools: cache.tools))
+
 case "bar":
     let application = NSApplication.shared
     application.setActivationPolicy(.accessory)
@@ -110,6 +136,6 @@ case "bar":
     application.run()
 
 default:
-    Printer.err("usage: vitals [snapshot | json | predict <pid> | watch [s] [diskGB] | claude | bar]")
+    Printer.err("usage: vitals [snapshot | json | predict <pid> | watch [s] [diskGB] | claude | mcp [refresh] | bar]")
     exit(2)
 }

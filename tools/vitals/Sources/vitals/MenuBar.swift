@@ -2,6 +2,7 @@ import AppKit
 import VitalsClaude
 import VitalsCore
 import VitalsKernel
+import VitalsMCP
 
 @MainActor
 final class MenuBarController: NSObject, NSMenuDelegate {
@@ -25,6 +26,14 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private var lastSnapshot: Snapshot?
     private var claudeSnapshot: ClaudeTelemetrySnapshot?
     private var claudeSessions = ClaudeSessionsSnapshot.empty
+    /// MCP servers for the projects of the live sessions plus home. Cheap
+    /// file reads on every menu open; tool lists come from the on-disk cache
+    /// and are refreshed only through an explicit probe action.
+    private var mcpSnapshot = MCPSnapshot.empty
+    private var mcpCache = MCPToolCache.load()
+    private var mcpProbing: Set<String> = []
+    private var mcpHeaderView: MCPHeaderView?
+    private var mcpRows: [(name: String, view: MCPRowView)] = []
     private var menuIsOpen = false
     private var claudeRefreshInFlight = false
     /// Set after the Keychain refused a read; background polling stays off
@@ -79,6 +88,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         menuIsOpen = true
         claudeSessions = ClaudeSessionStore.load(home: claudeHome)
+        reloadMCP()
         if let snapshot = lastSnapshot {
             render(snapshot)
         }
@@ -94,8 +104,181 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             self.refreshHintView = nil
             self.groupRows = []
             self.memberRows = []
+            self.mcpHeaderView = nil
+            self.mcpRows = []
             self.menu.addItem(self.quitItem())
         }
+    }
+
+    // MARK: MCP
+
+    private var mcpProjects: [String] {
+        var projects = [FileManager.default.homeDirectoryForCurrentUser.path]
+        for session in claudeSessions.sessions where !projects.contains(session.cwd) {
+            projects.append(session.cwd)
+        }
+        return projects
+    }
+
+    private func reloadMCP() {
+        mcpSnapshot = MCPConfigStore.load(home: claudeHome, projects: mcpProjects)
+    }
+
+    private func addMCPItems() {
+        guard !mcpSnapshot.servers.isEmpty else { return }
+        let header = MCPHeaderView(width: menuWidth) { [weak self] in
+            guard let self else { return }
+            Clipboard.copy(MCPText.lines(self.mcpSnapshot.servers, tools: self.mcpCache.tools))
+        }
+        mcpHeaderView = header
+        menu.addItem(viewItem(header))
+        for server in mcpSnapshot.servers.prefix(8) {
+            let row = MCPRowView(width: menuWidth)
+            mcpRows.append((name: server.name, view: row))
+            let item = viewItem(row)
+            item.submenu = mcpSubmenu(for: server)
+            menu.addItem(item)
+        }
+        if mcpSnapshot.servers.count > 8 {
+            menu.addItem(label("… \(mcpSnapshot.servers.count - 8) more, all included in Copy all"))
+        }
+        updateMCPRows()
+        menu.addItem(.separator())
+    }
+
+    private func updateMCPRows() {
+        mcpHeaderView?.update(
+            servers: mcpSnapshot.servers.count,
+            tools: mcpCache.toolCount,
+            probing: !mcpProbing.isEmpty
+        )
+        let byName = Dictionary(mcpSnapshot.servers.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        for row in mcpRows {
+            guard let server = byName[row.name] else { continue }
+            row.view.update(server, record: mcpCache.records[server.name], probing: mcpProbing.contains(server.name)) { [weak self] in
+                guard let self else { return }
+                Clipboard.copy(MCPText.line(server, tools: self.mcpCache.tools[server.name]))
+            }
+        }
+    }
+
+    private func mcpSubmenu(for server: MCPServer) -> NSMenu {
+        let submenu = NSMenu()
+        submenu.appearance = NSAppearance(named: .darkAqua)
+        let tools = mcpCache.tools[server.name]
+        submenu.addItem(mcpAction("Copy line with callable tools", color: Palette.primary) { [weak self] in
+            guard let self else { return }
+            Clipboard.copy(MCPText.line(server, tools: self.mcpCache.tools[server.name]))
+        })
+        if let tools, !tools.isEmpty {
+            submenu.addItem(mcpAction("Copy ToolSearch query (\(tools.count) tools)", color: Palette.primary) {
+                Clipboard.copy(MCPText.toolSearchQuery(server: server, tools: tools))
+            })
+        }
+        submenu.addItem(mcpAction(
+            server.transport.isProbeable ? "Probe tools now (launches the server)" : "Cannot probe \(server.transport.summary)",
+            color: server.transport.isProbeable ? Palette.blue : Palette.secondary
+        ) { [weak self] in
+            self?.probe(server)
+        })
+        submenu.addItem(.separator())
+        for project in mcpSnapshot.projects {
+            guard let status = server.status[project] else { continue }
+            let enabled = status == .enabled
+            let path = abbreviated(project)
+            let title: String
+            let color: NSColor
+            switch status {
+            case .enabled: title = "✓ \(path)"; color = Palette.mint
+            case .disabled: title = "○ \(path) · disabled"; color = Palette.secondary
+            case .pendingApproval: title = "? \(path) · approve"; color = Palette.blue
+            case .pluginOff: title = "○ \(path) · plugin off"; color = Palette.secondary
+            }
+            let item = mcpAction(title, color: color) { [weak self] in
+                guard let self, status != .pluginOff else { return }
+                do {
+                    try MCPToggle.write(enabled ? .disable : .enable, server: server, project: project, home: self.claudeHome)
+                } catch {
+                    Printer.err("mcp toggle: \(error)")
+                }
+                self.reloadMCP()
+                if let lastSnapshot = self.lastSnapshot, self.menuIsOpen { self.render(lastSnapshot) }
+            }
+            item.toolTip = status == .pluginOff
+                ? "Enable the plugin in settings.json first"
+                : "Click to \(enabled ? "disable" : "enable") for new sessions in \(project). Running sessions are not touched."
+            submenu.addItem(item)
+        }
+        if let tools, !tools.isEmpty {
+            submenu.addItem(.separator())
+            for tool in tools.prefix(40) {
+                let item = mcpAction(tool.name, color: Palette.primary) {
+                    Clipboard.copy(MCPText.callableName(server: server.name, tool: tool.name))
+                }
+                item.toolTip = tool.description.isEmpty
+                    ? "Click to copy \(MCPText.callableName(server: server.name, tool: tool.name))"
+                    : "\(tool.description)\nClick to copy \(MCPText.callableName(server: server.name, tool: tool.name))"
+                submenu.addItem(item)
+            }
+            if tools.count > 40 {
+                submenu.addItem(label("… \(tools.count - 40) more, all in the copied line"))
+            }
+        } else if let record = mcpCache.records[server.name], let error = record.error {
+            submenu.addItem(.separator())
+            submenu.addItem(label("last probe failed: \(error)", color: Palette.coral))
+        }
+        return submenu
+    }
+
+    private func mcpAction(_ title: String, color: NSColor, _ handler: @escaping @MainActor () -> Void) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(runMCPAction(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = MCPActionBox(handler)
+        item.attributedTitle = NSAttributedString(
+            string: title,
+            attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .medium), .foregroundColor: color]
+        )
+        return item
+    }
+
+    @objc private func runMCPAction(_ sender: NSMenuItem) {
+        (sender.representedObject as? MCPActionBox)?.handler()
+    }
+
+    private func probe(_ server: MCPServer) {
+        guard !mcpProbing.contains(server.name) else { return }
+        mcpProbing.insert(server.name)
+        updateMCPRows()
+        Task { [weak self] in
+            let result = await Task.detached(priority: .utility) { MCPProbe.tools(of: server) }.value
+            guard let self else { return }
+            let record: MCPProbeRecord
+            switch result {
+            case let .success(tools): record = MCPProbeRecord(tools: tools, error: nil, probedAt: Date())
+            case let .failure(error): record = MCPProbeRecord(tools: [], error: Self.describe(error), probedAt: Date())
+            }
+            self.mcpCache.records[server.name] = record
+            try? self.mcpCache.save()
+            self.mcpProbing.remove(server.name)
+            if let lastSnapshot = self.lastSnapshot, self.menuIsOpen { self.render(lastSnapshot) } else { self.updateMCPRows() }
+        }
+    }
+
+    private static func describe(_ error: MCPProbeError) -> String {
+        switch error {
+        case .notProbeable: "transport cannot be probed"
+        case let .launchFailed(detail): "launch failed: \(detail)"
+        case .timeout: "no tools/list answer within the timeout"
+        case let .badResponse(detail): detail
+        case let .http(code): "HTTP \(code)"
+        }
+    }
+
+    private func abbreviated(_ path: String) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if path == home { return "~" }
+        if path.hasPrefix(home + "/") { return "~" + path.dropFirst(home.count) }
+        return path
     }
 
     private var menuWidth: CGFloat { networkEnabled ? 352 + ProcessRowView.networkWidth + 8 : 352 }
@@ -189,6 +372,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         refreshHintView = nil
         groupRows = []
         memberRows = []
+        mcpHeaderView = nil
+        mcpRows = []
 
         menu.addItem(viewItem(VitalsHeaderView()))
         menu.addItem(.separator())
@@ -204,6 +389,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             menu.addItem(viewItem(view))
             menu.addItem(.separator())
         }
+
+        addMCPItems()
 
         menu.addItem(viewItem(ProcessHeaderView(showsNetwork: networkEnabled)))
         let processLimit = claudeSnapshot == nil ? 12 : 8
@@ -1007,4 +1194,11 @@ private func fraction(_ numerator: UInt64, of denominator: UInt64) -> Double {
 
 private func compactDiskBytes(_ bytes: UInt64) -> String {
     String(format: "%.1f GB", Double(bytes) / 1_000_000_000.0)
+}
+
+/// Wraps a closure for `NSMenuItem.representedObject`.
+@MainActor
+private final class MCPActionBox: NSObject {
+    let handler: @MainActor () -> Void
+    init(_ handler: @escaping @MainActor () -> Void) { self.handler = handler }
 }

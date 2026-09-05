@@ -52,6 +52,10 @@
             "run": ["swift", "run", "--scratch-path", "{build}/swift", "-c", "release", "claude-selftest"]
           },
           {
+            "name": "mcp-selftest",
+            "run": ["swift", "run", "--scratch-path", "{build}/swift", "-c", "release", "mcp-selftest"]
+          },
+          {
             "name": "signature",
             "run": ["codesign", "--verify", "--deep", "--strict", "{build}/Vitals.app"]
           }
