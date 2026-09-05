@@ -11,11 +11,13 @@ let package = Package(
             name: "VitalsClaude",
             linkerSettings: [.linkedFramework("Security")]
         ),
+        .target(name: "VitalsMCP", dependencies: ["VitalsClaude"]),
         .executableTarget(
             name: "vitals",
-            dependencies: ["VitalsCore", "VitalsKernel", "VitalsClaude"]
+            dependencies: ["VitalsCore", "VitalsKernel", "VitalsClaude", "VitalsMCP"]
         ),
         .executableTarget(name: "selftest", dependencies: ["VitalsCore", "VitalsKernel"]),
-        .executableTarget(name: "claude-selftest", dependencies: ["VitalsClaude"])
+        .executableTarget(name: "claude-selftest", dependencies: ["VitalsClaude"]),
+        .executableTarget(name: "mcp-selftest", dependencies: ["VitalsMCP"])
     ]
 )

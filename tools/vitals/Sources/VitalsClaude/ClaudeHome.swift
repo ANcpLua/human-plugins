@@ -33,6 +33,24 @@ public struct ClaudeHome: Sendable, Equatable {
         root.appendingPathComponent("settings.json")
     }
 
+    /// `~/.claude.json`: user-scope MCP servers, per-project MCP state, OAuth
+    /// bookkeeping. Lives next to `~/.claude`, or inside `CLAUDE_CONFIG_DIR`
+    /// when that override is set, mirroring Claude Code.
+    public var configFileURL: URL {
+        if root.lastPathComponent == ".claude" {
+            return root.deletingLastPathComponent().appendingPathComponent(".claude.json")
+        }
+        return root.appendingPathComponent(".claude.json")
+    }
+
+    public var pluginsDirectory: URL {
+        root.appendingPathComponent("plugins", isDirectory: true)
+    }
+
+    public var installedPluginsURL: URL {
+        pluginsDirectory.appendingPathComponent("installed_plugins.json")
+    }
+
     public var daemonRosterURL: URL {
         root.appendingPathComponent("daemon", isDirectory: true)
             .appendingPathComponent("roster.json")
