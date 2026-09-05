@@ -108,16 +108,6 @@
         "macos"
       ],
       "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/twitch-launcher"
-    },
-    {
-      "id": "vitals",
-      "displayName": "Vitals",
-      "summary": "Native macOS menu-bar telemetry for CPU, memory pressure, disk, processes, and Claude usage.",
-      "kind": "app",
-      "platforms": [
-        "macos"
-      ],
-      "catalogEntry": "https://github.com/ANcpLua/human-plugins/tree/main/tools/vitals"
     }
   ]
 }

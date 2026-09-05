@@ -28,7 +28,6 @@ check → build → test → package → smoke → isolated deploy → health �
 | [qyl-discord-sync](tools/qyl-discord-sync/README.md) | macOS, Linux | Mirrors versioned upstream documentation into Discord |
 | [repo-hygiene](tools/repo-hygiene/README.md) | macOS, Linux | Finds committed build output without scanning file contents |
 | [twitch-launcher](tools/twitch-launcher/README.md) | macOS | Shows Twitch channels and opens streams through Streamlink |
-| [vitals](tools/vitals/README.md) | macOS | Native menu-bar CPU, memory, disk, process, and Claude telemetry |
 
 [`catalog.json`](catalog.json) is the generated machine index. `AGENTS.md` is
 the repository contract.

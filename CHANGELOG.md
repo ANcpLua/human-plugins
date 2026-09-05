@@ -13,9 +13,11 @@ Format: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Newest e
   repo-hygiene.
 
 ### Changed
-- This repository is now the source of truth for Vitals and Disk Guard.
+- This repository is now the source of truth for Disk Guard.
 
 ### Removed
+- Vitals. It lives in its own repository again, github.com/ANcpLua/vitals,
+  with a fresh history and its own `install.sh`.
 - Heizöl Monitor source, packaging, and releases. It is maintained only in its
   private standalone repository.
 - Federated ownership and the AirPods polling-era implementation.
